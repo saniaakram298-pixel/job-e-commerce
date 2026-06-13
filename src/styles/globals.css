@@ -1,0 +1,202 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Design System Utilities */
+
+@layer base {
+  body {
+    @apply bg-background text-on-surface;
+    font-family: 'Manrope', sans-serif;
+  }
+
+  h1,
+  h2,
+  h3,
+  .serif {
+    font-family: 'Noto Serif', serif;
+  }
+
+  .material-symbols-outlined {
+    font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24;
+  }
+
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: #fcf9f8;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: #000000;
+  }
+}
+
+@layer components {
+  /* Buttons */
+  .btn-primary {
+    @apply px-8 py-4 bg-primary text-on-primary font-sans uppercase tracking-widest text-sm hover:bg-primary-container transition;
+  }
+
+  .btn-secondary {
+    @apply px-8 py-4 border border-outline text-primary font-sans uppercase tracking-widest text-sm hover:bg-surface-container-high transition;
+  }
+
+  .btn-ghost {
+    @apply text-primary font-sans uppercase tracking-widest text-sm hover:text-primary-fixed transition;
+  }
+
+  /* Input fields - Minimalist style */
+  .input-base {
+    @apply w-full bg-surface border-b border-outline-variant py-3 px-0 text-sm focus:outline-none focus:border-primary transition;
+  }
+
+  /* Cards */
+  .card {
+    @apply bg-surface-container-low;
+  }
+
+  .card-elevated {
+    @apply bg-surface-container-highest;
+  }
+
+  /* Containers */
+  .container-base {
+    @apply max-w-7xl mx-auto px-4 md:px-12;
+  }
+
+  /* Glass effect - for headers and floating elements */
+  .glass {
+    @apply bg-stone-50/80 backdrop-blur-xl;
+  }
+
+  /* No-line divider - use tonal shift instead */
+  .divider-soft {
+    @apply border-b border-surface-variant;
+  }
+
+  /* Typography helpers */
+  .text-display-lg {
+    @apply font-serif text-5xl md:text-6xl lg:text-7xl tracking-tighter;
+  }
+
+  .text-display-md {
+    @apply font-serif text-4xl md:text-5xl tracking-tighter;
+  }
+
+  .text-headline {
+    @apply font-serif text-2xl tracking-tighter;
+  }
+
+  .text-title {
+    @apply font-sans text-lg font-bold uppercase tracking-widest;
+  }
+
+  .text-label {
+    @apply font-sans text-xs uppercase tracking-widest;
+  }
+
+  /* Gradient for premium feel */
+  .gradient-premium {
+    @apply bg-gradient-to-r from-primary to-primary-container;
+  }
+
+  /* Spacing utilities */
+  .space-y-safe {
+    @apply space-y-6;
+  }
+
+  .space-x-safe {
+    @apply space-x-6;
+  }
+}
+
+@layer utilities {
+  /* Custom utilities */
+  .transition-smooth {
+    @apply transition duration-300 ease-in-out;
+  }
+
+  .hover-lift {
+    @apply hover:scale-105 transition-smooth;
+  }
+
+  /* Grid utilities */
+  .grid-auto {
+    @apply grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8;
+  }
+
+  /* Flexbox utilities */
+  .flex-center {
+    @apply flex items-center justify-center;
+  }
+
+  .flex-between {
+    @apply flex items-center justify-between;
+  }
+
+  /* Positioning */
+  .fixed-header {
+    @apply fixed top-0 w-full z-50;
+  }
+
+  .sticky-top {
+    @apply sticky top-32;
+  }
+
+  /* Image utilities */
+  .image-fill {
+    @apply w-full h-full object-cover;
+  }
+
+  /* Responsive container */
+  .safe-area {
+    padding-left: max(1rem, env(safe-area-inset-left));
+    padding-right: max(1rem, env(safe-area-inset-right));
+  }
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideInUp {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@layer utilities {
+  .animate-fade-in {
+    animation: fadeIn 0.3s ease-in-out;
+  }
+
+  .animate-slide-in {
+    animation: slideInUp 0.5s ease-in-out;
+  }
+}
+
+/* Details element styling for accordion */
+details > summary {
+  cursor: pointer;
+  user-select: none;
+}
+
+details > summary::-webkit-details-marker {
+  display: none;
+}
