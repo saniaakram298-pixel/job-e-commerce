@@ -2,25 +2,41 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { api } from '@/lib/api';
 // ... baki imports same rahengy
 
 export default function Collections() {
     // ... aapke purane states yahan aayenge
     const [rawProducts, setRawProducts] = useState<any[]>([]); // Original flat data from DB
     const [activeSections, setActiveSections] = useState<any[]>([]);
+    const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
         const fetchDashboardData = async () => {
             try {
-                const parsedData = await api.get('/collections', false);
+                setIsLoading(true);
+                setError(null);
+
+                const apiUrl = new URL('/api/collections', window.location.origin);
+                apiUrl.searchParams.set('page', '1');
+                apiUrl.searchParams.set('limit', '1000');
+
+                const response = await fetch(apiUrl.toString(), { cache: 'no-store' });
+                const parsedData = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(parsedData?.error || 'Failed to fetch collections');
+                }
+
                 const collectionsData = Array.isArray(parsedData)
                     ? parsedData
                     : Array.isArray(parsedData?.collections)
                         ? parsedData.collections
-                        : [];
+                        : Array.isArray(parsedData?.data)
+                            ? parsedData.data
+                            : [];
 
-                setRawProducts(collectionsData);
+                setRawProducts(collectionsData || []);
 
                 const structuredData: any[] = [];
                 collectionsData.forEach((adminItem: any) => {
@@ -36,6 +52,7 @@ export default function Collections() {
                         numericPrice: Number(adminItem.price),
                         img: adminItem.img || 'https://images.unsplash.com/photo-1591047139829-d91aecb6caea?auto=format&fit=crop&q=80',
                         category: categoryName,
+                        createdAt: adminItem.createdAt,
                     };
 
                     if (matchedSection) {
@@ -53,6 +70,9 @@ export default function Collections() {
                 console.error('Error fetching collections:', error);
                 setRawProducts([]);
                 setActiveSections([]);
+            }
+            finally {
+                setIsLoading(false);
             }
         };
         fetchDashboardData();
@@ -78,7 +98,7 @@ export default function Collections() {
             <div className="h-[65vh] relative flex items-center justify-center bg-stone-200">
                 <Image src="https://images.unsplash.com/photo-1490481651871-ab68de25d43d?auto=format&fit=crop&q=80" alt="Hero" fill className="object-cover opacity-70" priority />
                 <div className="relative z-10 text-center text-white">
-                    <h1 className="font-serif text-7xl md:text-9xl italic tracking-tighter">Atelier</h1>
+                    <h1 className="font-serif text-7xl md:text-9xl italic tracking-tighter">Collection</h1>
                 </div>
             </div>
 
@@ -88,11 +108,20 @@ export default function Collections() {
                     <span className="text-[10px] uppercase tracking-[0.4em] text-stone-400 font-bold mb-2 block">Freshly Added</span>
                     <h2 className="font-serif text-5xl italic">New Arrivals</h2>
                 </div>
-                <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                    {newArrivals.map((item) => (
-                        <ProductCard key={item._id} item={item} />
-                    ))}
+                    <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                    {newArrivals.length > 0 ? (
+                        newArrivals.map((item) => (
+                            <ProductCard key={item.id || item._id} item={item} />
+                        ))
+                    ) : (
+                        <div className="col-span-full text-center text-stone-500 py-16">
+                            {isLoading ? 'Loading collections...' : 'No products available in this category yet.'}
+                        </div>
+                    )}
                 </div>
+                {error && (
+                    <p className="text-center text-sm text-red-500 mt-6">{error}</p>
+                )}
             </section>
 
             {/* LOGIC 2: CATEGORIES (With 10 items limit) */}
