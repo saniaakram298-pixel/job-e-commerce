@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
+import BackButton from '@/components/BackButton';
 
 interface EditorialStory {
     id: string;
@@ -141,6 +142,10 @@ export default function EditorialPage() {
             <div className="w-[1px] h-12 bg-stone-300 animate-pulse" />
         </div>
 
+        {/* Back Button Section */}
+        <div className="max-w-[1440px] mx-auto px-6 py-8">
+            <BackButton />
+        </div>
 
         {/* 2. MAIN STORIES GRID */}
         <section className="max-w-[1440px] mx-auto px-6 py-24">

@@ -1,6 +1,15 @@
+import Link from 'next/link';
+
 export default function SignupPage() {
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 py-12">
+    <div className="min-h-screen flex flex-col items-center justify-center px-4 py-12">
+      {/* Back Button */}
+      <div className="absolute top-8 left-8">
+        <Link href="/" className="flex items-center gap-2 text-sm font-semibold uppercase tracking-widest text-stone-600 hover:text-stone-900 transition-colors">
+          ← Back to Home
+        </Link>
+      </div>
+
       <div className="max-w-md w-full">
         <div className="text-center mb-12">
           <h1 className="font-serif text-4xl tracking-tighter mb-2">THE ATELIER</h1>

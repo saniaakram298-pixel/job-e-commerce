@@ -24,8 +24,8 @@ export const useAuthStore = create<AuthStore>()(
 
       // Default Admin Credentials Object
       fillAdminCredentials: () => ({
-        email: 'admin@atelier.com',
-        password: '`admin123`',
+        email: 'admin@theatelier.com',
+        password: 'admin123456',
         firstName: 'Admin',
         lastName: 'User',
       }),

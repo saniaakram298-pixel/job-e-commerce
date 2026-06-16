@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
+import BackButton from '@/components/BackButton';
 
 interface LookbookItem {
     id: string;
@@ -127,16 +128,11 @@ export default function LookbookPage() {
     }, []);
     <main className="min-h-screen bg-[#faf9f6] text-[#1a1a1a] selection:bg-black selection:text-white">
 
-        {/* 1. MINIMAL NAV */}
-        <nav className="fixed top-0 w-full z-50 px-8 py-6 flex justify-between items-center mix-blend-difference text-white">
-            <Link href="/" className="text-[10px] font-bold uppercase tracking-[0.4em] hover:opacity-50 transition-all">
-                ← Back
-            </Link>
-            <h1 className="text-xl font-serif italic tracking-tighter">Atelier 2026</h1>
-            <div className="w-10" /> {/* Spacer */}
-        </nav>
-
-        <div className="max-w-[1600px] mx-auto px-6 pt-32 pb-20">
+        <div className="max-w-[1600px] mx-auto px-6 pt-20">
+            {/* Back Button */}
+            <div className="mb-12">
+                <BackButton />
+            </div>
 
             {/* 2. PAGE HEADER */}
             <header className="max-w-2xl mb-24">

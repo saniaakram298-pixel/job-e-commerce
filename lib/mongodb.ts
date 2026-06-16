@@ -4,31 +4,11 @@ import { global } from 'styled-jsx/css';
 
 const uri = process.env.MONGODB_URI as string;
 const options: MongoClientOptions = {
-    allowPartialTrustChain: undefined,
-    ALPNProtocols: undefined,
-    ca: undefined,
-    cert: undefined,
-    checkServerIdentity: undefined,
-    ciphers: undefined,
-    crl: undefined,
-    ecdhCurve: undefined,
-    key: undefined,
-    minDHSize: undefined,
-    passphrase: undefined,
-    pfx: undefined,
-    rejectUnauthorized: undefined,
-    secureContext: undefined,
-    secureProtocol: undefined,
-    servername: undefined,
-    session: undefined,
-    autoSelectFamily: undefined,
-    autoSelectFamilyAttemptTimeout: undefined,
-    keepAliveInitialDelay: undefined,
-    family: undefined,
-    hints: undefined,
-    localAddress: undefined,
-    localPort: undefined,
-    lookup: undefined
+    // Fail fast if Atlas is unreachable
+    serverSelectionTimeoutMS: 5000,
+    connectTimeoutMS: 10000,
+    // Prefer IPv4 in some environments
+    family: 4,
 };
 
 let client: MongoClient;
@@ -47,13 +27,19 @@ if (process.env.NODE_ENV === 'development') {
     // Development mein connection cache karte hain
     if (!globalWithMongo._mongoClientPromise) {
         client = new MongoClient(uri, options);
-        globalWithMongo._mongoClientPromise = client.connect();
+        globalWithMongo._mongoClientPromise = client.connect().catch((err) => {
+            console.error('MongoClient connect error (dev):', err.message || err);
+            throw new Error((err && err.message) || String(err) + "\nCheck MONGODB_URI and Atlas IP whitelist.");
+        });
     }
     clientPromise = globalWithMongo._mongoClientPromise;
 } else {
     // Production mein seedha connect
     client = new MongoClient(uri, options);
-    clientPromise = client.connect();
+    clientPromise = client.connect().catch((err) => {
+        console.error('MongoClient connect error (prod):', err.message || err);
+        throw new Error((err && err.message) || String(err) + "\nCheck MONGODB_URI and Atlas IP whitelist.");
+    });
 }
 
 export default clientPromise;

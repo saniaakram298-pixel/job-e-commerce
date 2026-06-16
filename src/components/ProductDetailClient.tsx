@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState } from 'react';
-import Image from 'next/image';
 import Link from 'next/link';
 import { Product } from '@/types';
 
@@ -14,7 +13,11 @@ export default function ProductDetailClient({ product }: ProductDetailClientProp
     name: product.name || 'Product',
     description: product.description || '',
     price: typeof product.price === 'number' ? product.price : Number(product.price) || 0,
-    images: Array.isArray(product.images) ? product.images : [],
+    images: Array.isArray(product.images) && product.images.length > 0
+      ? product.images
+      : product.img
+      ? [product.img]
+      : [],
     sizes: Array.isArray(product.sizes) ? product.sizes : [],
     colors: Array.isArray(product.colors) ? product.colors : [],
     collection: product.collection || '',
@@ -33,7 +36,7 @@ export default function ProductDetailClient({ product }: ProductDetailClientProp
   const selectedSizeStock =
     safeProduct.sizes.find((entry) => entry.size === selectedSize)?.stock ?? 0;
   const mainImage =
-    safeProduct.images[selectedImageIndex] || safeProduct.images[0] || '/images/hero.png';
+    safeProduct.images[selectedImageIndex] || safeProduct.images[0] || '';
 
   return (
     <div className="min-h-screen bg-[#fcf9f8] text-[#1c1b1b]">
@@ -46,30 +49,34 @@ export default function ProductDetailClient({ product }: ProductDetailClientProp
       </nav>
 
       <main className="max-w-[1400px] mx-auto px-8 py-16 grid grid-cols-1 lg:grid-cols-2 gap-20">
-        <div className="space-y-6">
-          <div className="relative aspect-[3/4] bg-stone-200 overflow-hidden shadow-2xl">
-            <Image
-              src={mainImage}
-              alt={`${product.name} product image`}
-              fill
-              className="object-cover"
-              priority
-            />
-          </div>
+        <div className="flex flex-col gap-6">
+          <div className="flex gap-6 items-start">
+            <div className="grid gap-4 w-28">
+              {safeProduct.images?.map((image, index) => (
+                <button
+                  key={image + index}
+                  type="button"
+                  onClick={() => setSelectedImageIndex(index)}
+                  className={`relative overflow-hidden rounded-sm border transition ${
+                    selectedImageIndex === index ? 'border-black' : 'border-stone-200'
+                  }`}
+                >
+                  <img src={image} alt={`${product.name} thumbnail ${index + 1}`} className="w-full h-24 object-cover" />
+                </button>
+              ))}
+            </div>
 
-          <div className="grid grid-cols-4 gap-4">
-            {product.images?.map((image, index) => (
-              <button
-                key={image + index}
-                type="button"
-                onClick={() => setSelectedImageIndex(index)}
-                className={`relative aspect-[3/4] overflow-hidden rounded-sm border transition ${
-                  selectedImageIndex === index ? 'border-black' : 'border-stone-200'
-                }`}
-              >
-                <Image src={image} alt={`${product.name} thumbnail ${index + 1}`} fill className="object-cover" />
-              </button>
-            ))}
+            <div className="relative aspect-[3/4] bg-stone-200 overflow-hidden shadow-2xl flex-1">
+              {mainImage ? (
+                <img
+                  src={mainImage}
+                  alt={`${product.name} product image`}
+                  className="object-cover w-full h-full"
+                />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center text-stone-500">No image available</div>
+              )}
+            </div>
           </div>
 
           <div className="bg-white p-8 border border-stone-100 italic shadow-sm">

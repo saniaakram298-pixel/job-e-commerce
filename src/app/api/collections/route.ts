@@ -102,7 +102,7 @@ export async function POST(request: NextRequest) {
         price,
         collection,
         category,
-        images: img ? [img] : [],
+        images: Array.isArray(body.images) && body.images.length > 0 ? body.images : img ? [img] : [],
         materials: body.materials || [],
         sizes,
         colors: body.colors || [],

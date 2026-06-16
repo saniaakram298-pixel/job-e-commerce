@@ -10,6 +10,7 @@ export interface Collection {
   collection?: string;
   category: string;
   img: string;
+  images?: string[];
   tags?: string[];
   tag?: string;
   stock: number;
@@ -64,8 +65,8 @@ export const Home: React.FC<CollectionsProps> = ({
   const [editingItem, setEditingItem] = useState<Collection | null>(null);
   const [editPayload, setEditPayload] = useState<EditPayload | null>(null);
   const [detailDescription, setDetailDescription] = useState('');
-const [detailImages, setDetailImages] = useState<File[]>([]); // Multiple files
-const [detailPreviews, setDetailPreviews] = useState<string[]>([]);
+  const [detailImages, setDetailImages] = useState<File[]>([]); // Multiple files
+  const [detailPreviews, setDetailPreviews] = useState<string[]>([]);
 
   const categories = [
     'bridal',
@@ -86,17 +87,57 @@ const [detailPreviews, setDetailPreviews] = useState<string[]>([]);
     { id: 'our-collection', label: 'Our Collection' },
   ];
 
+  const COLLECTIONS_CACHE_KEY = 'atelier-admin-collections-cache';
+  const COLLECTIONS_UI_STATE_KEY = 'atelier-admin-collections-ui-state';
+
+  const safeParseJSON = <T,>(value: string | null): T | null => {
+    if (!value) return null;
+    try {
+      return JSON.parse(value) as T;
+    } catch {
+      return null;
+    }
+  };
+
+  const loadCachedCollections = React.useCallback((): Collection[] => {
+    if (typeof window === 'undefined') return [];
+    const raw = window.localStorage.getItem(COLLECTIONS_CACHE_KEY);
+    const parsed = safeParseJSON<Collection[]>(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  }, []);
+
+  const loadCachedUIState = React.useCallback(() => {
+    if (typeof window === 'undefined') return null;
+    return safeParseJSON<{ searchTerm: string; displaySection: string; page: number }>(
+      window.localStorage.getItem(COLLECTIONS_UI_STATE_KEY)
+    );
+  }, []);
+
   useEffect(() => {
     if (collections.length > 0) {
       setLocalCollections(collections);
       setIsLoadingData(false);
       return;
     }
-  }, [collections]);
 
-  const fetchCollections = async (pageNumber: number = 1) => {
+    const cachedCollections = loadCachedCollections();
+    const cachedState = loadCachedUIState();
+
+    if (cachedCollections.length > 0) {
+      setLocalCollections(cachedCollections);
+      setIsLoadingData(false);
+    }
+
+    if (cachedState) {
+      if (cachedState.searchTerm) setSearchTerm(cachedState.searchTerm);
+      if (cachedState.displaySection) setDisplaySection(cachedState.displaySection);
+      if (cachedState.page) setPage(cachedState.page);
+    }
+  }, [collections, loadCachedCollections, loadCachedUIState]);
+
+  const fetchCollections = React.useCallback(async (pageNumber: number = 1, showLoading = true) => {
     try {
-      setIsLoadingData(true);
+      if (showLoading) setIsLoadingData(true);
       const response = await fetch(`/api/collections?page=${pageNumber}&limit=${limit}`, { cache: 'no-store' });
       const data = await response.json();
       if (response.ok && Array.isArray(data.collections)) {
@@ -109,15 +150,38 @@ const [detailPreviews, setDetailPreviews] = useState<string[]>([]);
     } catch (error) {
       console.error('Error fetching collections:', error);
     } finally {
-      setIsLoadingData(false);
+      if (showLoading) setIsLoadingData(false);
     }
-  };
+  }, [limit]);
 
   useEffect(() => {
     if (collections.length === 0) {
-      fetchCollections(page);
+      const cachedCollections = loadCachedCollections();
+      const useLoading = cachedCollections.length === 0;
+      fetchCollections(page, useLoading);
     }
-  }, [collections.length, page]);
+  }, [collections.length, fetchCollections, loadCachedCollections, page]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      window.localStorage.setItem(COLLECTIONS_CACHE_KEY, JSON.stringify(localCollections));
+    } catch {
+      // ignore localStorage write failures
+    }
+  }, [localCollections]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      window.localStorage.setItem(
+        COLLECTIONS_UI_STATE_KEY,
+        JSON.stringify({ searchTerm, displaySection, page })
+      );
+    } catch {
+      // ignore localStorage write failures
+    }
+  }, [searchTerm, displaySection, page]);
 
   const stats = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -172,6 +236,26 @@ const [detailPreviews, setDetailPreviews] = useState<string[]>([]);
     }
   };
 
+  const readFilesAsDataURLs = async (files: File[]) => {
+    return await Promise.all(
+      files.map(
+        file =>
+          new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => {
+              if (typeof reader.result === 'string') {
+                resolve(reader.result);
+              } else {
+                reject(new Error('Unable to read file'));
+              }
+            };
+            reader.onerror = () => reject(reader.error);
+            reader.readAsDataURL(file);
+          })
+      )
+    );
+  };
+
   const resetForm = () => {
     setTitle('');
     setCategory('');
@@ -179,7 +263,10 @@ const [detailPreviews, setDetailPreviews] = useState<string[]>([]);
     setStock('10');
     setDescription('');
     setBadge('');
+    setDetailDescription('');
     setImagePreview(null);
+    setDetailImages([]);
+    setDetailPreviews([]);
     setErrorMessage('');
   };
 
@@ -269,12 +356,16 @@ const [detailPreviews, setDetailPreviews] = useState<string[]>([]);
       return;
     }
 
+    const detailImageUrls = detailImages.length > 0 ? await readFilesAsDataURLs(detailImages) : [];
+    const images = [imagePreview, ...detailImageUrls].filter(Boolean);
+
     const productData = {
       title,
       description,
       price: parseFloat(price),
       category,
       img: imagePreview,
+      images,
       collection: displaySection,
       tags: [sections.find(s => s.id === displaySection)?.label || '', badge].filter(Boolean),
       stock: Number(stock) || 10,
@@ -472,9 +563,9 @@ const [detailPreviews, setDetailPreviews] = useState<string[]>([]);
   />
 </label>
 
-{/* Multiple Images Upload */}
+{/* Details Upload */}
 <label className="space-y-2 text-sm md:col-span-2">
-  <span className="text-neutral-400 uppercase tracking-[0.2em] text-[10px]">Product Gallery (Multiple Images)</span>
+  <span className="text-neutral-400 uppercase tracking-[0.2em] text-[10px]">Details (Additional photos)</span>
   <input
     type="file"
     multiple
@@ -490,7 +581,7 @@ const [detailPreviews, setDetailPreviews] = useState<string[]>([]);
   />
   <div className="grid grid-cols-4 gap-2 mt-3">
     {detailPreviews.map((src, index) => (
-      <img key={index} src={src} alt={`Preview ${index}`} className="w-full h-20 rounded-lg object-cover border border-neutral-800" />
+      <img key={index} src={src} alt={`Detail preview ${index + 1}`} className="w-full h-20 rounded-lg object-cover border border-neutral-800" />
     ))}
   </div>
 </label>

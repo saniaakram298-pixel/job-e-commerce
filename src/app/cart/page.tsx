@@ -20,7 +20,12 @@ export default function CartPage() {
       </header>
 
       <main className="pt-32 pb-20 px-4 md:px-12 max-w-7xl mx-auto">
-        <h1 className="font-serif text-5xl tracking-tighter mb-12">Shopping Bag</h1>
+        <div className="mb-8 flex items-center justify-between">
+          <h1 className="font-serif text-5xl tracking-tighter">Shopping Bag</h1>
+          <a href="/" className="text-xs uppercase tracking-widest font-semibold text-stone-600 hover:text-stone-900 transition-colors">
+            ← Back to Home
+          </a>
+        </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-12">
           {/* Cart Items */}

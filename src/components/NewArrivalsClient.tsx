@@ -6,11 +6,20 @@ import ProductCardClient from './ProductCardClient';
 import { Arrival } from '@/types';
 import { ArrowRight } from 'lucide-react';
 
-export default function NewArrivalsClient() {
-  const [displayArrivals, setDisplayArrivals] = useState<Arrival[]>([]);
-  const [loading, setLoading] = useState(true);
+interface NewArrivalsClientProps {
+  initialArrivals?: Arrival[];
+}
+
+export default function NewArrivalsClient({ initialArrivals = [] }: NewArrivalsClientProps) {
+  const [displayArrivals, setDisplayArrivals] = useState<Arrival[]>(initialArrivals);
+  const [loading, setLoading] = useState(initialArrivals.length === 0);
 
   useEffect(() => {
+    if (initialArrivals.length > 0) {
+      setLoading(false);
+      return;
+    }
+
     let mounted = true;
     async function fetchArrivals() {
       try {
@@ -30,7 +39,7 @@ export default function NewArrivalsClient() {
 
     fetchArrivals();
     return () => { mounted = false; };
-  }, []);
+  }, [initialArrivals.length]);
 
   return (
     <section className="max-w-[1440px] mx-auto px-6 md:px-12 py-24 bg-white">

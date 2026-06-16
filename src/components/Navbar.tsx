@@ -132,7 +132,7 @@ export default function Navbar({ scrolled }: NavbarProps) {
                     <Link
                       href={link.href}
                       onClick={() => setIsOpen(false)}
-                      className={`text-sm uppercase tracking-[0.2em] transition-all duration-300 ${
+                      className={`block text-sm uppercase tracking-[0.2em] transition-all duration-300 ${
                         isActive
                           ? "text-black font-bold"
                           : "text-stone-500 hover:text-black"
@@ -147,7 +147,8 @@ export default function Navbar({ scrolled }: NavbarProps) {
                         e.preventDefault();
                         setOpenState(!isOpenState);
                       }}
-                      className="p-1 hover:bg-stone-100 rounded-full transition-colors duration-300"
+                      className="ml-3 p-1 hover:bg-stone-100 rounded-full transition-colors duration-300"
+                      aria-label={`Toggle ${link.name} submenu`}
                     >
                       <span
                         className={`material-symbols-outlined text-[20px] text-stone-400 transition-transform duration-300 ${

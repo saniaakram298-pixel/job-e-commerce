@@ -7,10 +7,10 @@ import dotenv from 'dotenv';
 dotenv.config({ path: '.env.local' });
 
 import mongoose from 'mongoose';
-import { connectDB } from '@/lib/mongodb';
-import { Product } from '@/models/Product';
-import { hashPassword } from '@/lib/auth';
-import { User } from '@/models/User';
+import { connectDB } from '../src/lib/mongodb';
+import { Product } from '../src/models/Product';
+import { hashPassword } from '../src/lib/auth';
+import { User } from '../src/models/User';
 
 const sampleProducts = [
   {

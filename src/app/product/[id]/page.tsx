@@ -35,7 +35,11 @@ export default async function ProductDetailPage({ params }: ProductDetailPagePro
     price: typeof product.price === 'number' ? product.price : Number(product.price) || 0,
     collection: product.collection || '',
     category: product.category || '',
-    images: Array.isArray(product.images) ? product.images : [],
+    images: Array.isArray(product.images) && product.images.length > 0
+      ? product.images
+      : product.img
+      ? [product.img]
+      : [],
     sizes: Array.isArray(product.sizes) ? product.sizes : [],
     colors: Array.isArray(product.colors) ? product.colors : [],
     careInstructions: product.careInstructions || '',

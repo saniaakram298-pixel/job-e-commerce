@@ -1,0 +1,25 @@
+
+> the-atelier-ecommerce@1.0.0 build
+> next build
+
+  Gû¦ Next.js 14.2.35
+  - Environments: .env.local, .env
+
+   Creating an optimized production build ...
+ G£ô Compiled successfully
+   Skipping linting
+   Checking validity of types ...
+Failed to compile.
+System.Management.Automation.RemoteException
+./src/app/admin/dashboard/page.tsx:34:27
+Type error: Type 'never[] | { _id: string | { toString?: (() => string) | undefined; } | undefined; productId: string | { toString?: (() => string) | undefined; } | undefined; }[]' is not assignable to type 'CollectionItem[]'.
+  Type '{ _id: string | { toString?: (() => string) | undefined; } | undefined; productId: string | { toString?: (() => string) | undefined; } | undefined; }[]' is not assignable to type 'CollectionItem[]'.
+    Type '{ _id: string | { toString?: (() => string) | undefined; } | undefined; productId: string | { toString?: (() => string) | undefined; } | undefined; }' is missing the following properties from type 'CollectionItem': title, tag, img, category, and 3 more.
+System.Management.Automation.RemoteException
+[0m [90m 32 |[39m [36mexport[39m [36mdefault[39m [36masync[39m [36mfunction[39m [33mPage[39m() {[0m
+[0m [90m 33 |[39m   [36mconst[39m { collections[33m,[39m error } [33m=[39m [36mawait[39m fetchInitialCollections()[33m;[39m[0m
+[0m[31m[1m>[22m[39m[90m 34 |[39m   [36mreturn[39m [33m<[39m[33mDashboardClient[39m collections[33m=[39m{collections} initialError[33m=[39m{error} [33m/[39m[33m>[39m[33m;[39m[0m
+[0m [90m    |[39m                           [31m[1m^[22m[39m[0m
+[0m [90m 35 |[39m }[0m
+[0m [90m 36 |[39m[0m
+Next.js build worker exited with code: 1 and signal: null

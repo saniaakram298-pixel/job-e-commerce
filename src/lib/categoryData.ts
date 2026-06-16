@@ -4,7 +4,7 @@
  * with automatic limiting to the latest 10 products per category
  */
 
-import { ProductCategory } from '@/models/Product';
+import { ProductCategory, ProductTypedef } from '@/types/product';
 
 export interface CategoryProduct {
   _id: string;

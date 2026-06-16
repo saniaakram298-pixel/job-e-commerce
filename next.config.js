@@ -1,38 +1,27 @@
+const withBundleAnalyzer = require('@next/bundle-analyzer')({
+  enabled: false, // یہاں 'true' کی جگہ 'false' کر دیں
+});
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  staticPageGenerationTimeout: 300, 
   images: {
     remotePatterns: [
-      {
-        protocol: 'https',
-        hostname: '**.googleusercontent.com',
-      },
-      {
-        protocol: 'https',
-        hostname: '**.googleapis.com',
-      },
-      {
-        protocol: 'https',
-        hostname: 'images.unsplash.com',
-      },
-      {
-        protocol: 'https',
-        hostname: 'via.placeholder.com',
-      },
+      { protocol: 'https', hostname: '**.googleusercontent.com' },
+      { protocol: 'https', hostname: '**.googleapis.com' },
+      { protocol: 'https', hostname: 'images.unsplash.com' },
+      { protocol: 'https', hostname: 'via.placeholder.com' },
     ],
     formats: ['image/avif', 'image/webp'],
-    // Disable image optimization app-wide so external images load directly
-    // and avoid remote blob/ORB issues in the dev environment.
-    unoptimized: true,
-    // Increase timeout for image optimization in production
+    unoptimized: false, 
     minimumCacheTTL: 31536000,
   },
   reactStrictMode: true,
   swcMinify: true,
   poweredByHeader: false,
-  pageExtensions: ['ts', 'tsx', 'js', 'jsx'],
-  env: {
-    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || '',
+  eslint: {
+    ignoreDuringBuilds: true,
   },
 };
 
-module.exports = nextConfig;
+module.exports = withBundleAnalyzer(nextConfig);

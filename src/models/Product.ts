@@ -22,6 +22,7 @@ export interface IProduct {
   collection: string;
   category: ProductCategory;
   images: string[];
+  img?: string;
   materials: string[];
   sizes: Array<{
     size: string;
@@ -73,6 +74,7 @@ const productSchema = new Schema<IProduct>(
       index: true,
     },
     images: [String],
+    img: String,
     materials: [String],
     sizes: [
       {

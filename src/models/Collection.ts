@@ -61,7 +61,10 @@ const collectionSchema = new Schema<ICollection>(
       default: null,
     },
   },
-  { timestamps: true }
+  {
+    timestamps: true,
+    suppressReservedKeysWarning: true,
+  }
 );
 
 collectionSchema.index({ createdAt: -1 });

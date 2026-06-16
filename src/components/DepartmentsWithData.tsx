@@ -14,15 +14,18 @@ import { formatNumber } from '@/lib/price';
 interface DepartmentsProps {
     budget: number;
     setBudget: (budget: number) => void;
+    initialCategories?: CategoryWithProducts[];
 }
 
 export default function DepartmentsWithData({
     budget,
     setBudget,
+    initialCategories = [],
 }: DepartmentsProps) {
-    const [categories, setCategories] = useState<CategoryWithProducts[]>([]);
+    const filteredInitialCategories = initialCategories.filter((cat) => cat.category !== 'new-arrival');
+    const [categories, setCategories] = useState<CategoryWithProducts[]>(filteredInitialCategories);
     const [searchQuery, setSearchQuery] = useState('');
-    const [loading, setLoading] = useState(true);
+    const [loading, setLoading] = useState(filteredInitialCategories.length === 0);
     const router = useRouter();
 
     // Convert admin collection items into storefront categories if product grouping fails
@@ -62,6 +65,10 @@ export default function DepartmentsWithData({
 
     // Fetch categories with products
     useEffect(() => {
+        if (filteredInitialCategories.length > 0) {
+            return;
+        }
+
         const fetchData = async () => {
             try {
                 setLoading(true);
@@ -86,7 +93,7 @@ export default function DepartmentsWithData({
         };
 
         fetchData();
-    }, []);
+    }, [filteredInitialCategories.length]);
 
     const defaultImages: Record<string, string> = {
         'men': 'https://images.unsplash.com/photo-1490578474895-699cd4e2cf59?q=80&w=800',
