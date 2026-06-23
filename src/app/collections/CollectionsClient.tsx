@@ -59,15 +59,15 @@ export default function CollectionsClient() {
     isError,
     isLoading,
     refetch,
-  } = useInfiniteQuery({
+  } = useInfiniteQuery<CollectionsFetchResponse, Error, InfiniteData<CollectionsFetchResponse>, typeof collectionsQueryKey, number>({
     queryKey: collectionsQueryKey,
-    queryFn: async ({ pageParam = 1 }) => {
+    queryFn: async ({ pageParam = 1 }: QueryFunctionContext<typeof collectionsQueryKey, number>) => {
       const page = Number(pageParam) || 1;
       const apiUrl = new URL('/api/collections', window.location.origin);
       apiUrl.searchParams.set('page', String(page));
       apiUrl.searchParams.set('limit', String(PAGE_LIMIT));
 
-      const response = await fetch(apiUrl.toString(), { cache: 'no-store' });
+      const response = await fetch(apiUrl.toString());
       const parsedData = await response.json();
 
       if (!response.ok) {
@@ -85,12 +85,17 @@ export default function CollectionsClient() {
       return nextPage <= lastPage.pagination.pages ? nextPage : undefined;
     },
     retry: 2,
-    staleTime: 1000 * 60 * 2,
-    refetchOnWindowFocus: false,
+    staleTime: 1000 * 60 * 5,
+    keepPreviousData: true,
+    refetchOnWindowFocus: true,
+    refetchInterval: 1000 * 30,
+    refetchIntervalInBackground: true,
+    refetchOnMount: true,
+    refetchOnReconnect: true,
   });
 
   const allProducts = useMemo(() => {
-    return data?.pages?.flatMap((page: CollectionsFetchResponse) =>
+    return data?.pages?.flatMap((page) =>
       page.collections.map((product: Product) => ({
         ...product,
         id: product.id || product._id,

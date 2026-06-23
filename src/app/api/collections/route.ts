@@ -219,6 +219,7 @@ export async function POST(request: NextRequest) {
 
       revalidatePath('/');
       revalidatePath('/products');
+      revalidatePath('/collections');
     } catch (mirrorError) {
       console.warn('Collection saved but product mirror failed:', mirrorError);
     }
@@ -281,6 +282,7 @@ export async function DELETE(request: NextRequest) {
 
     revalidatePath('/');
     revalidatePath('/products');
+    revalidatePath('/collections');
 
     return NextResponse.json({ message: 'Collection deleted successfully' }, { status: 200 });
   } catch (error) {
