@@ -5,12 +5,14 @@ import { Arrival } from '@/types';
 
 interface CartItem extends Arrival {
     quantity: number;
+    size?: string;
 }
 
 interface CartContextType {
     cart: CartItem[];
-    addToCart: (product: Arrival) => void;
-    removeFromCart: (id: string | number) => void;
+    addToCart: (product: Arrival, quantity?: number, size?: string) => void;
+    updateQuantity: (id: string | number, quantity: number, size?: string) => void;
+    removeFromCart: (id: string | number, size?: string) => void;
     clearCart: () => void;
     cartCount: number;
 }
@@ -18,36 +20,80 @@ interface CartContextType {
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
 export const CartProvider = ({ children }: { children: React.ReactNode }) => {
+    // Initial state: khali array
     const [cart, setCart] = useState<CartItem[]>([]);
+    const [isMounted, setIsMounted] = useState(false);
+    const [persistCart, setPersistCart] = useState(true);
 
-    // Load cart from local storage on mount
+    // Ye useEffect sirf client side par chalega
     useEffect(() => {
+        setIsMounted(true);
         const savedCart = localStorage.getItem('atelier-cart');
         if (savedCart) {
-            setCart(JSON.parse(savedCart));
+            try {
+                setCart(JSON.parse(savedCart));
+            } catch (e) {
+                console.error("Failed to parse cart", e);
+            }
         }
     }, []);
 
-    // Save cart to local storage whenever it changes
-    useEffect(() => {
-        localStorage.setItem('atelier-cart', JSON.stringify(cart));
-    }, [cart]);
+    // Save cart to local storage (isMounted check k sath)
+   // Save cart to local storage (isMounted check ke saath)
+useEffect(() => {
+    if (!isMounted || !persistCart) return;
 
-    const addToCart = (product: Arrival) => {
+    try {
+        // Fix: Save sirf zaroori fields, images ko hata dein!
+        const lightweightCart = cart.map(({ images, ...item }) => item);
+        localStorage.setItem('atelier-cart', JSON.stringify(lightweightCart));
+    } catch (error: unknown) {
+        const isQuotaError =
+            error instanceof DOMException &&
+            (error.name === 'QuotaExceededError' || error.name === 'NS_ERROR_DOM_QUOTA_REACHED');
+
+        if (isQuotaError) {
+            console.warn('LocalStorage full ho gaya hai.');
+            setPersistCart(false);
+        }
+    }
+}, [cart, isMounted, persistCart]);
+
+    const addToCart = (product: Arrival, quantity: number = 1, size?: string) => {
         setCart((prevCart) => {
-            const existingItem = prevCart.find((item) => item.id === product.id);
-            if (existingItem) {
-                return prevCart.map((item) =>
-                    item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item
-                );
+            const existingIndex = prevCart.findIndex((item) =>
+                item.id === product.id && (item.size || undefined) === (size || undefined)
+            );
+
+            if (existingIndex >= 0) {
+                const updated = [...prevCart];
+                updated[existingIndex] = {
+                    ...updated[existingIndex],
+                    quantity: updated[existingIndex].quantity + quantity,
+                };
+                return updated;
             }
-            return [...prevCart, { ...product, quantity: 1 }];
+
+            return [...prevCart, { ...product, quantity, ...(size ? { size } : {}) }];
         });
-        alert(`${product.name} added to cart!`); // Simple feedback
     };
 
-    const removeFromCart = (id: string | number) => {
-        setCart((prevCart) => prevCart.filter((item) => item.id !== id));
+    const updateQuantity = (id: string | number, quantity: number, size?: string) => {
+        setCart((prevCart) =>
+            prevCart.map((item) =>
+                item.id === id && (item.size || undefined) === (size || undefined)
+                    ? { ...item, quantity: Math.max(1, quantity) }
+                    : item
+            )
+        );
+    };
+
+    const removeFromCart = (id: string | number, size?: string) => {
+        setCart((prevCart) =>
+            prevCart.filter(
+                (item) => !(item.id === id && (item.size || undefined) === (size || undefined))
+            )
+        );
     };
 
     const clearCart = () => setCart([]);
@@ -55,7 +101,7 @@ export const CartProvider = ({ children }: { children: React.ReactNode }) => {
     const cartCount = cart.reduce((total, item) => total + item.quantity, 0);
 
     return (
-        <CartContext.Provider value={{ cart, addToCart, removeFromCart, clearCart, cartCount }}>
+        <CartContext.Provider value={{ cart, addToCart, updateQuantity, removeFromCart, clearCart, cartCount }}>
             {children}
         </CartContext.Provider>
     );

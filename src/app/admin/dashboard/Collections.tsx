@@ -20,6 +20,7 @@ export interface Collection {
 interface CollectionsProps {
   collections?: Collection[];
   onUpdate?: () => Promise<void>;
+  isLoading?: boolean;
   initialSection?: string;
   componentTitle?: string;
   showAllSections?: boolean;
@@ -38,6 +39,7 @@ interface EditPayload {
 export const Home: React.FC<CollectionsProps> = ({
   collections = [],
   onUpdate,
+  isLoading = false,
   initialSection = 'new-arrival',
   componentTitle = 'Home',
   showAllSections = false,
@@ -47,12 +49,12 @@ export const Home: React.FC<CollectionsProps> = ({
   const [displaySection, setDisplaySection] = useState(initialSection);
   const showSectionTabs = !showAllSections;
   const [showForm, setShowForm] = useState(false);
-  const [isLoadingData, setIsLoadingData] = useState(true);
+  const [isLoadingData, setIsLoadingData] = useState(Boolean(isLoading));
   const [loading, setLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [page, setPage] = useState(1);
-  const [limit] = useState(12);
+  const [limit] = useState(20);
   const [totalPages, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
   const [stock, setStock] = useState('10');
@@ -87,101 +89,13 @@ export const Home: React.FC<CollectionsProps> = ({
     { id: 'our-collection', label: 'Our Collection' },
   ];
 
-  const COLLECTIONS_CACHE_KEY = 'atelier-admin-collections-cache';
-  const COLLECTIONS_UI_STATE_KEY = 'atelier-admin-collections-ui-state';
-
-  const safeParseJSON = <T,>(value: string | null): T | null => {
-    if (!value) return null;
-    try {
-      return JSON.parse(value) as T;
-    } catch {
-      return null;
-    }
-  };
-
-  const loadCachedCollections = React.useCallback((): Collection[] => {
-    if (typeof window === 'undefined') return [];
-    const raw = window.localStorage.getItem(COLLECTIONS_CACHE_KEY);
-    const parsed = safeParseJSON<Collection[]>(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  }, []);
-
-  const loadCachedUIState = React.useCallback(() => {
-    if (typeof window === 'undefined') return null;
-    return safeParseJSON<{ searchTerm: string; displaySection: string; page: number }>(
-      window.localStorage.getItem(COLLECTIONS_UI_STATE_KEY)
-    );
-  }, []);
+  useEffect(() => {
+    setLocalCollections(collections);
+  }, [collections]);
 
   useEffect(() => {
-    if (collections.length > 0) {
-      setLocalCollections(collections);
-      setIsLoadingData(false);
-      return;
-    }
-
-    const cachedCollections = loadCachedCollections();
-    const cachedState = loadCachedUIState();
-
-    if (cachedCollections.length > 0) {
-      setLocalCollections(cachedCollections);
-      setIsLoadingData(false);
-    }
-
-    if (cachedState) {
-      if (cachedState.searchTerm) setSearchTerm(cachedState.searchTerm);
-      if (cachedState.displaySection) setDisplaySection(cachedState.displaySection);
-      if (cachedState.page) setPage(cachedState.page);
-    }
-  }, [collections, loadCachedCollections, loadCachedUIState]);
-
-  const fetchCollections = React.useCallback(async (pageNumber: number = 1, showLoading = true) => {
-    try {
-      if (showLoading) setIsLoadingData(true);
-      const response = await fetch(`/api/collections?page=${pageNumber}&limit=${limit}`, { cache: 'no-store' });
-      const data = await response.json();
-      if (response.ok && Array.isArray(data.collections)) {
-        setLocalCollections(data.collections);
-        setTotalCount(data.pagination?.total || 0);
-        setTotalPages(data.pagination?.pages || 1);
-      } else {
-        console.error('Failed to fetch collections:', data);
-      }
-    } catch (error) {
-      console.error('Error fetching collections:', error);
-    } finally {
-      if (showLoading) setIsLoadingData(false);
-    }
-  }, [limit]);
-
-  useEffect(() => {
-    if (collections.length === 0) {
-      const cachedCollections = loadCachedCollections();
-      const useLoading = cachedCollections.length === 0;
-      fetchCollections(page, useLoading);
-    }
-  }, [collections.length, fetchCollections, loadCachedCollections, page]);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    try {
-      window.localStorage.setItem(COLLECTIONS_CACHE_KEY, JSON.stringify(localCollections));
-    } catch {
-      // ignore localStorage write failures
-    }
-  }, [localCollections]);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    try {
-      window.localStorage.setItem(
-        COLLECTIONS_UI_STATE_KEY,
-        JSON.stringify({ searchTerm, displaySection, page })
-      );
-    } catch {
-      // ignore localStorage write failures
-    }
-  }, [searchTerm, displaySection, page]);
+    setIsLoadingData(Boolean(isLoading));
+  }, [isLoading]);
 
   const stats = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -226,6 +140,10 @@ export const Home: React.FC<CollectionsProps> = ({
     setTotalCount(filteredCollections.length);
     setPage(prevPage => Math.min(prevPage, pages));
   }, [filteredCollections, limit]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [searchTerm, displaySection, showAllSections]);
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];

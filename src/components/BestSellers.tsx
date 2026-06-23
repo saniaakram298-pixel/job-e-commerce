@@ -3,6 +3,7 @@
 import { Arrival } from '@/types';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { useCart } from '@/context/CartContext';
 
 interface BestSellersProps {
     arrivals: Arrival[];
@@ -10,6 +11,7 @@ interface BestSellersProps {
 
 export default function BestSellers({ arrivals }: BestSellersProps) {
     const router = useRouter();
+    const { addToCart } = useCart();
 
     const placeholderImg = "https://images.unsplash.com/photo-1441984904996-e0b6ba687e12?q=80&w=800";
 
@@ -112,10 +114,30 @@ export default function BestSellers({ arrivals }: BestSellersProps) {
                                         <p className="text-[9px] text-stone-400 uppercase tracking-[0.15em]">
                                             Premium Collection
                                         </p>
-                                        <span className="text-[10px] text-stone-900 opacity-0 group-hover:opacity-100 font-bold tracking-wider uppercase transition-all duration-300 flex items-center gap-1 translate-x-2 group-hover:translate-x-0">
-                                            View Details 
-                                            <span className="text-[12px] font-normal">→</span>
-                                        </span>
+                                        <div className="flex items-center gap-2">
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    addToCart({
+                                                        id: item.id || item._id,
+                                                        _id: item._id,
+                                                        name: item.name || item.title,
+                                                        img: productImg,
+                                                        price: String(item.price ?? 0),
+                                                        cat: item.category || item.collection || 'Best Seller',
+                                                        category: item.category || item.collection || 'Best Seller',
+                                                        images: item.images ? [item.images[0]] : [],
+                                                    });
+                                                }}
+                                                className="text-[10px] uppercase tracking-[0.2em] font-bold text-white bg-stone-900 px-3 py-2 rounded-sm hover:bg-stone-800 transition"
+                                            >
+                                                Add to Cart
+                                            </button>
+                                            <span className="text-[10px] text-stone-900 opacity-0 group-hover:opacity-100 font-bold tracking-wider uppercase transition-all duration-300 flex items-center gap-1 translate-x-2 group-hover:translate-x-0">
+                                                View Details 
+                                                <span className="text-[12px] font-normal">→</span>
+                                            </span>
+                                        </div>
                                     </div>
                                 </div>
                             </div>

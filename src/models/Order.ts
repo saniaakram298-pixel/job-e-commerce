@@ -2,7 +2,11 @@ import mongoose, { Schema, Model } from 'mongoose';
 
 export interface IOrder {
   _id: mongoose.Types.ObjectId | string;
-  userId: string;
+  userId?: string;
+  orderNumber?: number;
+  customerName?: string;
+  customerEmail?: string;
+  customerPhone?: string;
   items: Array<{
     productId: string;
     name: string;
@@ -31,6 +35,11 @@ export interface IOrder {
   orderStatus: 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
   trackingNumber?: string;
   notes?: string;
+  followUpNotes?: Array<{
+    message: string;
+    timestamp: Date;
+    sentBy?: string;
+  }>;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -39,8 +48,16 @@ const orderSchema = new Schema<IOrder>(
   {
     userId: {
       type: String,
-      required: true,
+      required: false,
     },
+    orderNumber: {
+      type: Number,
+      unique: true,
+      sparse: true,
+    },
+    customerName: String,
+    customerEmail: String,
+    customerPhone: String,
     items: [
       {
         productId: String,
@@ -82,6 +99,13 @@ const orderSchema = new Schema<IOrder>(
     },
     trackingNumber: String,
     notes: String,
+    followUpNotes: [
+      {
+        message: String,
+        timestamp: { type: Date, default: Date.now },
+        sentBy: String,
+      },
+    ],
   },
   { timestamps: true }
 );

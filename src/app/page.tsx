@@ -12,7 +12,7 @@ const HomePageClient = dynamicImport(() => import('@/components/HomePageClient')
 });
 
 export const revalidate = 60;
-export const dynamic = 'force-static';
+export const dynamic = 'force-dynamic';
 
 const categoryOrder: ProductCategory[] = [
   'bridal',
@@ -61,7 +61,7 @@ async function fetchHomeCategories(): Promise<CategoryWithProducts[]> {
       category: { $in: categoryOrder },
       active: true,
     })
-      .select('name price discountPrice images category featured createdAt tags')
+      .select('name price discountPrice images category featured createdAt tags stock')
       .sort({ createdAt: -1 })
       .lean();
 
@@ -82,6 +82,7 @@ async function fetchHomeCategories(): Promise<CategoryWithProducts[]> {
           featured: Boolean(product.featured),
           createdAt: product.createdAt ? new Date(product.createdAt).toISOString() : new Date().toISOString(),
           tags: Array.isArray(product.tags) ? product.tags : [],
+          stock: Number(product.stock ?? 0),
         })),
         total: filtered.length,
       };
@@ -97,7 +98,7 @@ async function fetchHomeBestSellers(): Promise<Arrival[]> {
     await connectDB();
 
     const newArrivals = await Product.find({ active: true })
-      .select('name description price discountPrice images category tags rating featured collection')
+      .select('name description price discountPrice images category tags rating featured collection stock')
       .sort({ createdAt: -1 })
       .limit(8)
       .lean();
@@ -115,6 +116,7 @@ async function fetchHomeBestSellers(): Promise<Arrival[]> {
       cat: product.category || '',
       collectionName: product.collection || '',
       tags: normalizeTags(product.tags),
+      stock: Number(product.stock ?? 0),
     }));
 
     const filteredBestSellers = mappedArrivals.filter((item) => {
@@ -184,6 +186,7 @@ async function fetchHomeNewArrivals(): Promise<Arrival[]> {
       rating: product.rating,
       featured: product.featured,
       collection: product.collection || '',
+      stock: Number(product.stock ?? 0),
     }));
   } catch (error) {
     console.error('Error fetching new arrivals:', error);

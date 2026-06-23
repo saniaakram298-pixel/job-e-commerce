@@ -16,6 +16,7 @@ export interface CategoryProduct {
   featured: boolean;
   createdAt: string;
   tags?: string[];
+  stock?: number;
 }
 
 export interface CategoryGroupedData {

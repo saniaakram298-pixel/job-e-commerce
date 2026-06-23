@@ -1,7 +1,8 @@
 "use client";
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
+import { InfiniteData, QueryFunctionContext, useInfiniteQuery } from '@tanstack/react-query';
 import ProductDetailModal from './ProductDetailModal';
 import BackButton from '@/components/BackButton';
 
@@ -28,21 +29,122 @@ interface Section {
   items: Product[];
 }
 
-interface CollectionsClientProps {
-  initialRawProducts: Product[];
-  initialActiveSections: Section[];
+interface CollectionsFetchResponse {
+  collections: Product[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    pages: number;
+  };
 }
 
-export default function CollectionsClient({ 
-  initialRawProducts = [], 
-  initialActiveSections = [] 
-}: CollectionsClientProps) {
-  const [rawProducts, setRawProducts] = useState<Product[]>(initialRawProducts);
-  const [activeSections, setActiveSections] = useState<Section[]>(initialActiveSections);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+const PAGE_LIMIT = 20;
+const collectionsQueryKey = ['collections', PAGE_LIMIT] as const;
+
+type CollectionsQueryKey = typeof collectionsQueryKey;
+
+export default function CollectionsClient() {
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+
+  const {
+    data,
+    error,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    isFetching,
+    isError,
+    isLoading,
+    refetch,
+  } = useInfiniteQuery({
+    queryKey: collectionsQueryKey,
+    queryFn: async ({ pageParam = 1 }) => {
+      const page = Number(pageParam) || 1;
+      const apiUrl = new URL('/api/collections', window.location.origin);
+      apiUrl.searchParams.set('page', String(page));
+      apiUrl.searchParams.set('limit', String(PAGE_LIMIT));
+
+      const response = await fetch(apiUrl.toString(), { cache: 'no-store' });
+      const parsedData = await response.json();
+
+      if (!response.ok) {
+        throw new Error(parsedData?.error || 'Failed to load collections');
+      }
+
+      return {
+        collections: Array.isArray(parsedData.collections) ? parsedData.collections : [],
+        pagination: parsedData.pagination || { page, limit: PAGE_LIMIT, total: 0, pages: 1 },
+      };
+    },
+    initialPageParam: 1,
+    getNextPageParam: (lastPage) => {
+      const nextPage = lastPage.pagination.page + 1;
+      return nextPage <= lastPage.pagination.pages ? nextPage : undefined;
+    },
+    retry: 2,
+    staleTime: 1000 * 60 * 2,
+    refetchOnWindowFocus: false,
+  });
+
+  const allProducts = useMemo(() => {
+    return data?.pages?.flatMap((page: CollectionsFetchResponse) =>
+      page.collections.map((product: Product) => ({
+        ...product,
+        id: product.id || product._id,
+      }))
+    ) ?? [];
+  }, [data]);
+
+  const totalStock = useMemo(() => {
+    return allProducts.reduce((sum, product) => sum + (product.stock ?? 0), 0);
+  }, [allProducts]);
+
+  const activeSections = useMemo<Section[]>(() => {
+    const sections: Section[] = [];
+
+    allProducts.forEach((product: Product) => {
+      const categoryName = product.category || 'General';
+      const matchedSection = sections.find(
+        (section) => section.category.toLowerCase() === categoryName.toLowerCase()
+      );
+      const item: Product = {
+        ...product,
+        category: categoryName,
+      };
+
+      if (matchedSection) {
+        matchedSection.items.push(item);
+      } else {
+        sections.push({
+          title: `${categoryName} Collection`,
+          category: categoryName,
+          items: [item],
+        });
+      }
+    });
+
+    return sections;
+  }, [allProducts]);
+
+  const errorMessage = isError ? error?.message || 'Unable to load collections.' : null;
+
+  useEffect(() => {
+    if (!loadMoreRef.current || !hasNextPage) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting && hasNextPage && !isFetchingNextPage) {
+          fetchNextPage();
+        }
+      },
+      { rootMargin: '300px' }
+    );
+
+    observer.observe(loadMoreRef.current);
+    return () => observer.disconnect();
+  }, [fetchNextPage, hasNextPage, isFetchingNextPage]);
 
   const handleViewDetails = (product: Product) => {
     setSelectedProduct(product);
@@ -54,85 +156,19 @@ export default function CollectionsClient({
     setSelectedProduct(null);
   };
 
-  useEffect(() => {
-    // Only fetch if no initial data was provided
-    if (initialRawProducts.length === 0) {
-      const fetchDashboardData = async () => {
-        try {
-          setIsLoading(true);
-          setError(null);
+  const handleRetry = () => {
+    refetch();
+  };
 
-          const apiUrl = new URL('/api/collections', window.location.origin);
-          apiUrl.searchParams.set('page', '1');
-          apiUrl.searchParams.set('limit', '1000');
-
-          const response = await fetch(apiUrl.toString(), { cache: 'no-store' });
-          const parsedData = await response.json();
-
-          if (!response.ok) {
-            throw new Error(parsedData?.error || 'Failed to fetch collections');
-          }
-
-          const collectionsData = Array.isArray(parsedData)
-            ? parsedData
-            : Array.isArray(parsedData?.collections)
-              ? parsedData.collections
-              : [];
-
-          setRawProducts(collectionsData || []);
-
-          const structuredData: Section[] = [];
-          collectionsData.forEach((adminItem: any) => {
-            const categoryName = adminItem.category || 'General';
-            const matchedSection = structuredData.find(
-              section => section.category.toLowerCase() === categoryName.toLowerCase()
-            );
-
-            const newItem = {
-              id: adminItem._id,
-              _id: adminItem._id,
-              name: adminItem.title,
-              title: adminItem.title,
-              price: `$${adminItem.price}`,
-              numericPrice: Number(adminItem.price),
-              img: adminItem.img || 'https://images.unsplash.com/photo-1591047139829-d91aecb6caea?auto=format&fit=crop&q=80',
-              category: categoryName,
-              createdAt: adminItem.createdAt,
-            };
-
-            if (matchedSection) {
-              matchedSection.items.push(newItem);
-            } else {
-              structuredData.push({
-                title: `${categoryName} Collection`,
-                category: categoryName,
-                items: [newItem],
-              });
-            }
-          });
-          setActiveSections(structuredData);
-        } catch (error) {
-          console.error('Error fetching collections:', error);
-          setRawProducts([]);
-          setActiveSections([]);
-        } finally {
-          setIsLoading(false);
-        }
-      };
-      fetchDashboardData();
-    }
-  }, [initialRawProducts.length]);
-
-  // LOGIC 1: New Arrivals (Puri inventory ke latest 10 items)
   const newArrivals = useMemo(() => {
-    return [...rawProducts]
+    return [...allProducts]
       .sort((a, b) => {
         const dateA = new Date(a.createdAt || 0).getTime();
         const dateB = new Date(b.createdAt || 0).getTime();
-        return dateB - dateA; // Latest products ko top par lane ke liye
+        return dateB - dateA;
       })
       .slice(0, 10);
-  }, [rawProducts]);
+  }, [allProducts]);
 
   return (
     <main className="min-h-screen bg-white text-stone-900 relative">
@@ -142,22 +178,20 @@ export default function CollectionsClient({
         onClose={handleCloseModal}
       />
 
-      {/* Navbar & Admin Panel Toggle (Same as before) */}
-
-      {/* Hero Section */}
       <div className="h-[65vh] relative flex items-center justify-center bg-stone-200">
         <Image src="https://images.unsplash.com/photo-1490481651871-ab68de25d43d?auto=format&fit=crop&q=80" alt="Hero" fill className="object-cover opacity-70" priority />
         <div className="relative z-10 text-center text-white">
           <h1 className="font-serif text-7xl md:text-9xl italic tracking-tighter">Collection</h1>
+          <p className="mt-4 text-base md:text-lg text-white/80 max-w-3xl mx-auto">
+            Showing {allProducts.length} products{data?.pages?.[0]?.pagination?.total ? ` of ${data.pages[0].pagination.total}` : ''} across the collection, with {totalStock} items currently in stock.
+          </p>
         </div>
       </div>
 
-      {/* Back Button Section */}
       <div className="max-w-[1440px] mx-auto px-6 md:px-12 pt-12">
         <BackButton />
       </div>
 
-      {/* LOGIC 1: NEW ARRIVALS SECTION (Hero ke foran baad) */}
       <section className="max-w-[1440px] mx-auto px-6 py-20 bg-stone-50">
         <div className="mb-12 text-center">
           <span className="text-[10px] uppercase tracking-[0.4em] text-stone-400 font-bold mb-2 block">Freshly Added</span>
@@ -166,8 +200,8 @@ export default function CollectionsClient({
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           {newArrivals.length > 0 ? (
             newArrivals.map((item) => (
-              <ProductCard 
-                key={item.id || item._id} 
+              <ProductCard
+                key={item.id || item._id}
                 item={item}
                 onViewDetails={() => handleViewDetails(item)}
               />
@@ -178,15 +212,23 @@ export default function CollectionsClient({
             </div>
           )}
         </div>
-        {error && (
-          <p className="text-center text-sm text-red-500 mt-6">{error}</p>
+        {errorMessage && (
+          <div className="mt-6 text-center text-sm text-red-500">
+            <p>{errorMessage}</p>
+            <button
+              type="button"
+              onClick={handleRetry}
+              className="mt-3 inline-flex items-center justify-center rounded-md border border-stone-900 px-4 py-2 text-sm font-semibold text-stone-900"
+            >
+              Retry
+            </button>
+          </div>
         )}
       </section>
 
-      {/* LOGIC 2: CATEGORIES (With 10 items limit) */}
       <div className="max-w-[1440px] mx-auto px-6 md:px-12 py-24">
         {activeSections.map((section, idx) => {
-          const displayItems = section.items.slice(0, 10); // Sirf pehly 10 items
+          const displayItems = section.items.slice(0, 10);
           const hasMore = section.items.length > 10;
 
           return (
@@ -201,9 +243,9 @@ export default function CollectionsClient({
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                {displayItems.map((item: any) => (
-                  <ProductCard 
-                    key={item.id} 
+                {displayItems.map((item) => (
+                  <ProductCard
+                    key={item.id}
                     item={item}
                     onViewDetails={() => handleViewDetails(item)}
                   />
@@ -212,23 +254,31 @@ export default function CollectionsClient({
             </div>
           );
         })}
+
+        <div ref={loadMoreRef} className="h-24 flex items-center justify-center">
+          {isFetchingNextPage ? (
+            <div className="text-sm text-stone-500">Loading more products...</div>
+          ) : hasNextPage ? (
+            <div className="text-sm text-stone-400">Scroll to load more</div>
+          ) : (
+            !isLoading && <div className="text-sm text-stone-400">No more products to load.</div>
+          )}
+        </div>
       </div>
     </main>
   );
 }
 
-// Chota reusable component safai ke liye
-function ProductCard({ item, onViewDetails }: { item: any; onViewDetails: () => void }) {
+function ProductCard({ item, onViewDetails }: { item: Product; onViewDetails: () => void }) {
   return (
     <div className="group cursor-pointer">
       <div className="relative aspect-[3/4] overflow-hidden bg-stone-100 rounded-lg">
-        <Image 
-          src={item.img} 
-          alt={item.name} 
-          fill 
-          className="object-cover transition-transform duration-700 group-hover:scale-105" 
+        <Image
+          src={item.img || 'https://images.unsplash.com/photo-1591047139829-d91aecb6caea?auto=format&fit=crop&q=80'}
+          alt={item.name || item.title}
+          fill
+          className="object-cover transition-transform duration-700 group-hover:scale-105"
         />
-        {/* View Details Button - Visible on Hover */}
         <button
           onClick={onViewDetails}
           className="absolute inset-0 flex items-center justify-center bg-black/0 hover:bg-black/40 transition-colors duration-300 opacity-0 group-hover:opacity-100"

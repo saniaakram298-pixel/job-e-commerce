@@ -1,7 +1,9 @@
 "use client";
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { X, ShoppingCart } from 'lucide-react';
+import { useCart } from '@/context/CartContext';
+import { Arrival } from '@/types';
 
 interface Product {
   id: string;
@@ -11,6 +13,7 @@ interface Product {
   price: string;
   numericPrice: number;
   img: string;
+  images?: string[];
   category: string;
   createdAt: string;
   description?: string;
@@ -33,17 +36,40 @@ export default function ProductDetailModal({
 }: ProductDetailModalProps) {
   const [selectedSize, setSelectedSize] = useState<string | null>(null);
   const [quantity, setQuantity] = useState(1);
+  const [selectedImageIndex, setSelectedImageIndex] = useState(0);
+  const { addToCart } = useCart();
+
+  useEffect(() => {
+    // reset selections when modal opens or product changes
+    setSelectedImageIndex(0);
+    setSelectedSize(null);
+    setQuantity(1);
+  }, [product?.id, isOpen]);
 
   if (!isOpen || !product) return null;
 
+  // Get all product images (detail images from admin + main image)
+  const displayImages = Array.isArray(product.images) && product.images.length > 0
+    ? product.images
+    : product.img
+    ? [product.img]
+    : [];
+
+  // Get the currently selected image for the main display
+  const mainImage = displayImages[selectedImageIndex] || product.img;
+
   const handleAddToCart = () => {
-    console.log('Adding to cart:', {
-      productId: product.id,
-      quantity,
-      selectedSize,
-    });
-    // TODO: Implement add to cart functionality
-    alert(`Added ${quantity} item(s) to cart${selectedSize ? ` - Size: ${selectedSize}` : ''}`);
+    const arrival: Arrival = {
+      id: product.id,
+      name: product.title || product.name,
+      img: product.img,
+      price: product.price,
+      images: displayImages,
+      category: product.category,
+      collectionName: product.collection,
+    } as unknown as Arrival;
+
+    addToCart(arrival, quantity, selectedSize || undefined);
     onClose();
   };
 
@@ -70,13 +96,35 @@ export default function ProductDetailModal({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 p-6 md:p-12">
             {/* Product Image */}
             <div className="flex items-start justify-center">
-              <div className="relative w-full aspect-[3/4] bg-stone-100 overflow-hidden rounded-lg">
-                <Image
-                  src={product.img}
-                  alt={product.name}
-                  fill
-                  className="object-cover"
-                />
+              <div className="flex gap-6 items-start w-full">
+                {/* Thumbnails Grid - Detail Images from Admin */}
+                <div className="grid gap-4 w-28">
+                  {displayImages.map((image, index) => (
+                    <button
+                      key={image + index}
+                      type="button"
+                      onClick={() => setSelectedImageIndex(index)}
+                      className={`relative overflow-hidden rounded-sm border transition ${
+                        selectedImageIndex === index ? 'border-black' : 'border-stone-200'
+                      }`}
+                    >
+                      <img src={image} alt={`${product.name} thumbnail ${index + 1}`} className="w-full h-24 object-cover" />
+                    </button>
+                  ))}
+                </div>
+
+                {/* Main Product Image */}
+                <div className="relative aspect-[3/4] bg-stone-200 overflow-hidden rounded-lg flex-1">
+                  {mainImage ? (
+                    <img
+                      src={mainImage}
+                      alt={`${product.name} product image`}
+                      className="object-cover w-full h-full"
+                    />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center text-stone-500">No image available</div>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -218,23 +266,7 @@ export default function ProductDetailModal({
                 </button>
               </div>
 
-              {/* Additional Info */}
-              <div className="mt-8 pt-8 border-t border-stone-200 space-y-3 text-sm text-stone-600">
-                <p>
-                  <span className="font-semibold text-stone-900">Collection:</span>{' '}
-                  {product.collection || 'General'}
-                </p>
-                <p>
-                  <span className="font-semibold text-stone-900">Product ID:</span>{' '}
-                  <code className="text-xs bg-stone-100 px-2 py-1 rounded">
-                    {product.id}
-                  </code>
-                </p>
-                <p>
-                  <span className="font-semibold text-stone-900">Added:</span>{' '}
-                  {new Date(product.createdAt).toLocaleDateString()}
-                </p>
-              </div>
+              {/* Additional Info removed per request (Collection, Product ID, Added) */}
             </div>
           </div>
         </div>

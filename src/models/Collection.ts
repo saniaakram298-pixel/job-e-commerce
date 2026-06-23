@@ -64,10 +64,13 @@ const collectionSchema = new Schema<ICollection>(
   {
     timestamps: true,
     suppressReservedKeysWarning: true,
+    autoIndex: true,
   }
 );
 
 collectionSchema.index({ createdAt: -1 });
+collectionSchema.index({ category: 1, createdAt: -1 });
+collectionSchema.index({ collection: 1, createdAt: -1 });
 
 if (mongoose.models.Collection) {
   delete mongoose.models.Collection;

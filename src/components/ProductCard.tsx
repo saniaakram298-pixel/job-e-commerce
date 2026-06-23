@@ -1,8 +1,9 @@
 "use client";
 
-import React from 'react';
+import { useState } from 'react';
 import { ShoppingBag, Heart } from 'lucide-react';
 import { formatCurrency } from '@/lib/price';
+import { useCart } from '@/context/CartContext';
 
 interface ProductCardProps {
   _id: string;
@@ -25,12 +26,27 @@ export default function ProductCard({
   category = 'Featured',
   description = ''
 }: ProductCardProps) {
-  const [isFavorite, setIsFavorite] = React.useState(false);
-  const [imageError, setImageError] = React.useState(false);
+  const { addToCart } = useCart();
+  const [isFavorite, setIsFavorite] = useState(false);
+  const [imageError, setImageError] = useState(false);
 
   const imageUrl = images?.[0] || '/api/placeholder/400/500';
   const displayPrice = discountPrice || price;
   const discount = discountPrice ? Math.round(((price - discountPrice) / price) * 100) : 0;
+
+  const handleAddToCart = (event: React.MouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation();
+    addToCart({
+      id: _id,
+      _id,
+      name,
+      img: imageUrl,
+      price: String(displayPrice),
+      cat: category,
+      category,
+      images,
+    });
+  };
 
   const getBadgeColor = (tag: string) => {
     switch (tag.toLowerCase()) {
@@ -85,7 +101,10 @@ export default function ProductCard({
 
         {/* Quick Action Buttons */}
         <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-          <button className="bg-white text-black px-6 py-3 rounded-full font-bold text-sm flex items-center gap-2 hover:bg-gray-100 transition-colors shadow-lg">
+          <button
+          onClick={handleAddToCart}
+          className="bg-white text-black px-6 py-3 rounded-full font-bold text-sm flex items-center gap-2 hover:bg-gray-100 transition-colors shadow-lg"
+        >
             <ShoppingBag className="w-5 h-5" />
             Add to Cart
           </button>

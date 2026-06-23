@@ -1,0 +1,25 @@
+
+> the-atelier-ecommerce@1.0.0 build
+> next build
+
+  Gû¦ Next.js 14.2.35
+  - Environments: .env.local, .env
+
+   Creating an optimized production build ...
+ G£ô Compiled successfully
+   Skipping linting
+   Checking validity of types ...
+Failed to compile.
+System.Management.Automation.RemoteException
+./src/app/api/collections/[id]/route.ts:48:40
+Type error: Type 'string' is not assignable to type 'Collection<Document> & string'.
+  Type 'string' is not assignable to type 'Collection<Document>'.
+System.Management.Automation.RemoteException
+[0m [90m 46 |[39m[0m
+[0m [90m 47 |[39m     [36mif[39m (body[33m.[39mtitle [33m!==[39m undefined) existingCollection[33m.[39mtitle [33m=[39m [33mString[39m(body[33m.[39mtitle [33m||[39m existingCollection[33m.[39mtitle)[33m;[39m[0m
+[0m[31m[1m>[22m[39m[90m 48 |[39m     [36mif[39m (body[33m.[39mcollection [33m!==[39m undefined) existingCollection[33m.[39mcollection [33m=[39m [33mString[39m(body[33m.[39mcollection [33m||[39m existingCollection[33m.[39mcollection)[33m;[39m[0m
+[0m [90m    |[39m                                        [31m[1m^[22m[39m[0m
+[0m [90m 49 |[39m     [36mif[39m (body[33m.[39mcategory [33m!==[39m undefined) existingCollection[33m.[39mcategory [33m=[39m [33mString[39m(body[33m.[39mcategory [33m||[39m existingCollection[33m.[39mcategory)[33m;[39m[0m
+[0m [90m 50 |[39m     [36mif[39m (body[33m.[39mprice [33m!==[39m undefined) existingCollection[33m.[39mprice [33m=[39m [33mNumber[39m(body[33m.[39mprice) [33m||[39m [35m0[39m[33m;[39m[0m
+[0m [90m 51 |[39m     [36mif[39m (body[33m.[39mdescription [33m!==[39m undefined) existingCollection[33m.[39mdescription [33m=[39m [33mString[39m(body[33m.[39mdescription [33m||[39m existingCollection[33m.[39mdescription [33m||[39m [32m''[39m)[33m;[39m[0m
+Next.js build worker exited with code: 1 and signal: null

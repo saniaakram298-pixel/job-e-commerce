@@ -10,6 +10,7 @@ import {
     ProductCategory,
 } from '@/lib/categoryData';
 import { formatNumber } from '@/lib/price';
+import { useCart } from '@/context/CartContext';
 
 interface DepartmentsProps {
     budget: number;
@@ -22,6 +23,7 @@ export default function DepartmentsWithData({
     setBudget,
     initialCategories = [],
 }: DepartmentsProps) {
+    const { addToCart } = useCart();
     const filteredInitialCategories = initialCategories.filter((cat) => cat.category !== 'new-arrival');
     const [categories, setCategories] = useState<CategoryWithProducts[]>(filteredInitialCategories);
     const [searchQuery, setSearchQuery] = useState('');
@@ -78,7 +80,8 @@ export default function DepartmentsWithData({
                 if (filteredData.length === 0) {
                     const collectionsRes = await fetch('/api/collections');
                     if (collectionsRes.ok) {
-                        const adminCollections = await collectionsRes.json();
+                        const maybe = await collectionsRes.json().catch(() => null);
+                        const adminCollections = Array.isArray(maybe) ? maybe : maybe?.collections ?? [];
                         filteredData = mapAdminCollectionsToCategories(adminCollections);
                     }
                 }
@@ -231,8 +234,23 @@ export default function DepartmentsWithData({
                                                             </span>
                                                         </div>
 
-                                                        <button className="w-full py-3 bg-white text-black text-[10px] uppercase tracking-widest font-bold hover:bg-stone-900 hover:text-white transition-colors duration-300">
-                                                            View Product
+                                                        <button
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                addToCart({
+                                                                    id: product._id,
+                                                                    _id: product._id,
+                                                                    name: product.name,
+                                                                    img: product.images?.[0] || defaultImages[cat.category] || defaultImages.default,
+                                                                    price: String(product.price || 0),
+                                                                    cat: product.category || cat.name,
+                                                                    category: product.category || cat.name,
+                                                                    images: product.images ?? [],
+                                                                });
+                                                            }}
+                                                            className="w-full py-3 bg-white text-black text-[10px] uppercase tracking-widest font-bold hover:bg-stone-900 hover:text-white transition-colors duration-300"
+                                                        >
+                                                            Add to Cart
                                                         </button>
                                                     </div>
                                                 </div>

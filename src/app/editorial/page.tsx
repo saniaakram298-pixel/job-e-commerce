@@ -52,9 +52,10 @@ export default function EditorialPage() {
                 setLoading(true);
                 const res = await fetch('/api/collections');
                 if (res.ok) {
-                    const data = await res.json();
+                    const maybe = await res.json().catch(() => null);
+                    const items = Array.isArray(maybe) ? maybe : maybe?.collections ?? [];
                     // Filter collections with category "editorial"
-                    const editorialCollections = data.filter((item: any) => item.category === 'editorial');
+                    const editorialCollections = items.filter((item: any) => item.category === 'editorial');
 
                     if (editorialCollections.length > 0) {
                         // Map to Story format

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Arrival } from '@/types';
 import { CategoryWithProducts } from '@/lib/categoryData';
 import Navbar from '@/components/Navbar';
@@ -35,6 +35,36 @@ export default function HomePageClient({ bestSellers, newArrivals = [], categori
   const [scrolled, setScrolled] = useState(false);
   const [budget, setBudget] = useState(5000);
 
+  const homepageSummary = useMemo(() => {
+    const productMap = new Map<string, number>();
+
+    const addProduct = (id: string | undefined, stock?: number) => {
+      if (!id) return;
+      const existingStock = productMap.get(id) ?? 0;
+      productMap.set(id, existingStock + (stock ?? 0));
+    };
+
+    categories.forEach((category) => {
+      category.products.forEach((product) => addProduct(product._id, product.stock));
+    });
+
+    bestSellers.forEach((product) => addProduct(product.id || product._id, product.stock));
+    newArrivals.forEach((product) => addProduct(product.id || product._id, product.stock));
+
+    const totalProducts = productMap.size;
+    const totalStock = Array.from(productMap.values()).reduce((sum, stockValue) => sum + stockValue, 0);
+
+    return {
+      totalProducts,
+      totalStock,
+    };
+  }, [categories, bestSellers, newArrivals]);
+
+  const heroDataWithStats = {
+    ...heroData,
+    subtitle: `${homepageSummary.totalProducts} products available on the homepage with ${homepageSummary.totalStock} items in stock`,
+  };
+
   useEffect(() => {
     const handleScroll = () => {
       setScrolled(window.scrollY > 50);
@@ -47,7 +77,7 @@ export default function HomePageClient({ bestSellers, newArrivals = [], categori
   return (
     <div className="min-h-screen bg-white">
       <Navbar scrolled={scrolled} />
-      <Hero data={heroData} />
+      <Hero data={heroDataWithStats} />
       <TrustBadges badges={trustBadges} />
 
       <main className="max-w-[1440px] mx-auto px-6 md:px-12 space-y-20 py-12">

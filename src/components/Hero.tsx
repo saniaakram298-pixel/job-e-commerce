@@ -20,6 +20,11 @@ export default function Hero({ data }: HeroProps) {
         <h1 className="font-serif text-6xl md:text-[100px] leading-tight tracking-tighter mb-8 drop-shadow-2xl">
           {data.title}
         </h1>
+        {data.subtitle && (
+          <p className="max-w-3xl text-sm md:text-base text-white/80 mb-6 leading-relaxed">
+            {data.subtitle}
+          </p>
+        )}
         <Link
           href={data.href}
           className="inline-block px-8 py-4 bg-transparent text-white border border-white/50 text-[10px] font-bold uppercase tracking-[0.4em] hover:bg-white hover:text-black transition-all duration-300"

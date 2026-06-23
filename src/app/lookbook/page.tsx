@@ -85,9 +85,10 @@ export default function LookbookPage() {
                 setLoading(true);
                 const res = await fetch('/api/collections');
                 if (res.ok) {
-                    const data = await res.json();
-                    // Filter for "lookbook" category
-                    const lookbookItems = data.filter((item: any) => item.category === 'lookbook');
+                        const maybe = await res.json().catch(() => null);
+                        const items = Array.isArray(maybe) ? maybe : maybe?.collections ?? [];
+                        // Filter for "lookbook" category
+                        const lookbookItems = items.filter((item: any) => item.category === 'lookbook');
 
                     if (lookbookItems.length > 0) {
                         const gridClasses = [

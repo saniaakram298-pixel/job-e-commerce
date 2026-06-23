@@ -2,24 +2,51 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
-import { Product } from '@/types';
+import { Product, Arrival } from '@/types';
+import { useCart } from '@/context/CartContext';
 
 interface ProductDetailClientProps {
   product: Product;
 }
 
+function normalizeSizes(sizes: unknown) {
+  if (!Array.isArray(sizes)) return [];
+  return sizes
+    .map((entry: any) => ({
+      size: String(entry?.size ?? '').trim(),
+      stock: Number(entry?.stock ?? 0),
+    }))
+    .filter((entry) => entry.size);
+}
+
+function normalizeColors(colors: unknown) {
+  if (!Array.isArray(colors)) return [];
+  return colors
+    .map((entry: any) => ({
+      color: String(entry?.color ?? '').trim(),
+      stock: Number(entry?.stock ?? 0),
+    }))
+    .filter((entry) => entry.color);
+}
+
+function normalizeImages(images: unknown, fallback?: unknown) {
+  const safeImages = Array.isArray(images)
+    ? images.filter((img) => typeof img === 'string')
+    : [];
+  if (safeImages.length > 0) return safeImages;
+  return typeof fallback === 'string' && fallback ? [fallback] : [];
+}
+
 export default function ProductDetailClient({ product }: ProductDetailClientProps) {
+  const { addToCart } = useCart();
+
   const safeProduct = {
     name: product.name || 'Product',
     description: product.description || '',
     price: typeof product.price === 'number' ? product.price : Number(product.price) || 0,
-    images: Array.isArray(product.images) && product.images.length > 0
-      ? product.images
-      : product.img
-      ? [product.img]
-      : [],
-    sizes: Array.isArray(product.sizes) ? product.sizes : [],
-    colors: Array.isArray(product.colors) ? product.colors : [],
+    images: normalizeImages(product.images, product.img),
+    sizes: normalizeSizes(product.sizes),
+    colors: normalizeColors(product.colors),
     collection: product.collection || '',
     category: product.category || '',
     careInstructions: product.careInstructions || '',
@@ -32,9 +59,110 @@ export default function ProductDetailClient({ product }: ProductDetailClientProp
     safeProduct.colors[0]?.color || ''
   );
   const [selectedImageIndex, setSelectedImageIndex] = useState<number>(0);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [showOrderForm, setShowOrderForm] = useState(false);
+  const [customerName, setCustomerName] = useState('');
+  const [customerEmail, setCustomerEmail] = useState('');
+  const [customerPhone, setCustomerPhone] = useState('');
+  const [street, setStreet] = useState('');
+  const [city, setCity] = useState('');
+  const [stateName, setStateName] = useState('');
+  const [zipCode, setZipCode] = useState('');
+  const [country, setCountry] = useState('');
+  const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
+  const [orderMessage, setOrderMessage] = useState('');
+  const [orderSuccess, setOrderSuccess] = useState('');
+
+  const toggleDrawer = (open: boolean) => {
+    setDrawerOpen(open);
+    if (!open) {
+      setShowOrderForm(false);
+      setOrderMessage('');
+    }
+  };
+
+  const orderItems = [
+    {
+      productId: product._id || '',
+      name: product.name,
+      quantity: 1,
+      price: safeProduct.price,
+      size: selectedSize || undefined,
+      color: selectedColor || undefined,
+    },
+  ];
+
+  const handleProceed = () => {
+    setShowOrderForm(true);
+    setOrderMessage('');
+    setOrderSuccess('');
+  };
+
+  const handleSubmitOrder = async () => {
+    if (!customerName.trim() || !customerEmail.trim() || !street.trim() || !city.trim() || !stateName.trim() || !zipCode.trim() || !country.trim()) {
+      setOrderMessage('Please fill in all required fields.');
+      return;
+    }
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail)) {
+      setOrderMessage('Please enter a valid email address.');
+      return;
+    }
+
+    const confirm = window.confirm('Do you want to confirm your order?');
+    if (!confirm) return;
+
+    setIsSubmittingOrder(true);
+    setOrderMessage('');
+
+    try {
+      const response = await fetch('/api/guest-orders', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          customerName,
+          customerEmail,
+          customerPhone,
+          shippingAddress: {
+            street,
+            city,
+            state: stateName,
+            zipCode,
+            country,
+          },
+          billingAddress: {
+            street,
+            city,
+            state: stateName,
+            zipCode,
+            country,
+          },
+          paymentMethod: 'Cash on Delivery',
+          items: orderItems,
+          totalPrice: orderItems.reduce((sum, item) => sum + item.price * item.quantity, 0),
+        }),
+      });
+
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result?.message || 'Failed to place the order');
+      }
+
+      setOrderSuccess('Order placed successfully! A confirmation email was sent.');
+      setOrderMessage('');
+    } catch (error: any) {
+      setOrderMessage(error?.message || 'Unable to submit order. Please try again.');
+    } finally {
+      setIsSubmittingOrder(false);
+    }
+  };
 
   const selectedSizeStock =
     safeProduct.sizes.find((entry) => entry.size === selectedSize)?.stock ?? 0;
+  const hasSizeOptions = safeProduct.sizes.length > 0;
+  const canAddToCart = !hasSizeOptions || selectedSizeStock > 0;
   const mainImage =
     safeProduct.images[selectedImageIndex] || safeProduct.images[0] || '';
 
@@ -61,7 +189,7 @@ export default function ProductDetailClient({ product }: ProductDetailClientProp
                     selectedImageIndex === index ? 'border-black' : 'border-stone-200'
                   }`}
                 >
-                  <img src={image} alt={`${product.name} thumbnail ${index + 1}`} className="w-full h-24 object-cover" />
+                  <img src={image} alt={`${safeProduct.name} thumbnail ${index + 1}`} className="w-full h-24 object-cover" />
                 </button>
               ))}
             </div>
@@ -107,7 +235,7 @@ export default function ProductDetailClient({ product }: ProductDetailClientProp
               )}
             </div>
             <div className="flex flex-wrap gap-4">
-              {product.sizes?.map((entry) => (
+              {safeProduct.sizes.map((entry) => (
                 <button
                   key={entry.size}
                   type="button"
@@ -128,9 +256,9 @@ export default function ProductDetailClient({ product }: ProductDetailClientProp
           </div>
 
           <div className="space-y-6">
-            <p className="text-[10px] font-bold uppercase tracking-widest">Color: <span className="text-stone-400 font-normal">{selectedColor || product.colors?.[0]?.color || 'Standard'}</span></p>
+            <p className="text-[10px] font-bold uppercase tracking-widest">Color: <span className="text-stone-400 font-normal">{selectedColor || safeProduct.colors[0]?.color || 'Standard'}</span></p>
             <div className="flex flex-wrap gap-4">
-              {product.colors?.map((entry) => (
+              {safeProduct.colors.map((entry) => (
                 <button
                   key={entry.color}
                   type="button"
@@ -146,18 +274,30 @@ export default function ProductDetailClient({ product }: ProductDetailClientProp
           </div>
 
           <div className="pt-4 space-y-4">
-            <button
-              disabled={selectedSizeStock === 0}
-              className={`w-full py-7 text-[11px] font-bold tracking-[0.5em] uppercase transition-all shadow-xl ${
-                selectedSizeStock === 0
-                  ? 'bg-stone-200 text-stone-400 cursor-not-allowed'
-                  : 'bg-black text-white hover:bg-stone-800 active:scale-[0.98]'
-              }`}
-            >
-              {selectedSizeStock > 0 ? 'Add to Bag' : 'Sold Out'}
-            </button>
-          </div>
+                <button
+                  type="button"
+                  disabled={!canAddToCart}
+                  onClick={() => {
+                    if (!canAddToCart) return;
 
+                    const cartItem: Arrival = {
+                      id: product._id || '',
+                      name: product.name,
+                      img: safeProduct.images[0] || product.img || '',
+                      price: String(safeProduct.price),
+                      cat: product.category || product.collection || '',
+                      category: product.category || product.collection || '',
+                      images: safeProduct.images,
+                    };
+
+                    addToCart(cartItem, 1, hasSizeOptions ? selectedSize : undefined);
+                    setDrawerOpen(true);
+                  }}
+                  className={`w-full py-7 rounded-none border border-black bg-black text-white text-base uppercase tracking-[0.2em] transition hover:bg-stone-900 disabled:bg-stone-200 disabled:text-stone-400 disabled:border-stone-200`}
+                >
+                  {canAddToCart ? 'Add to Bag' : 'Sold Out'}
+                </button>
+              </div>
           <div className="pt-12 border-t border-stone-200 space-y-8">
             <div>
               <p className="text-[10px] font-bold uppercase mb-4 tracking-[0.3em]">The Craftsmanship</p>
@@ -168,6 +308,147 @@ export default function ProductDetailClient({ product }: ProductDetailClientProp
           </div>
         </div>
       </main>
+
+      {drawerOpen && (
+        <div className="fixed inset-0 z-50 flex items-end justify-end">
+          <div
+            className="absolute inset-0 bg-black/40 transition-opacity"
+            onClick={() => toggleDrawer(false)}
+          />
+          <aside className="relative w-full max-w-md h-full bg-white shadow-2xl border-l border-stone-200 p-8 overflow-y-auto transform transition-transform duration-300 translate-x-0">
+            <button
+              type="button"
+              onClick={() => toggleDrawer(false)}
+              className="absolute top-4 right-4 text-stone-500 hover:text-stone-900"
+            >
+              Close
+            </button>
+            <div className="space-y-6 mt-8">
+              <div className="flex gap-4 items-center">
+                <div className="w-24 h-24 bg-stone-100 rounded-sm overflow-hidden">
+                  <img
+                    src={safeProduct.images[0] || product.img || '/api/placeholder/100/100'}
+                    alt={`${product.name} thumbnail`}
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+                <div>
+                  <p className="text-sm text-stone-500 uppercase tracking-[0.3em]">Added to Cart</p>
+                  <h2 className="text-2xl font-serif italic tracking-tighter">{product.name}</h2>
+                  <p className="text-lg font-bold mt-2">${safeProduct.price.toLocaleString()}</p>
+                </div>
+              </div>
+
+              {!showOrderForm ? (
+                <div className="space-y-4">
+                  <p className="text-sm text-stone-600">Your item is ready. Proceed to complete the order below.</p>
+                  <button
+                    type="button"
+                    onClick={handleProceed}
+                    className="w-full px-6 py-4 border border-black bg-black text-white uppercase tracking-[0.2em]"
+                  >
+                    Proceed
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-[0.4em] text-stone-400">Contact Details</p>
+                    <div className="mt-4 space-y-4">
+                      <input
+                        type="text"
+                        value={customerName}
+                        onChange={(e) => setCustomerName(e.target.value)}
+                        placeholder="Name"
+                        className="w-full border border-stone-200 px-4 py-3 outline-none focus:border-black"
+                      />
+                      <input
+                        type="email"
+                        value={customerEmail}
+                        onChange={(e) => setCustomerEmail(e.target.value)}
+                        placeholder="Email"
+                        className="w-full border border-stone-200 px-4 py-3 outline-none focus:border-black"
+                      />
+                      <input
+                        type="tel"
+                        value={customerPhone}
+                        onChange={(e) => setCustomerPhone(e.target.value)}
+                        placeholder="Phone"
+                        className="w-full border border-stone-200 px-4 py-3 outline-none focus:border-black"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-[0.4em] text-stone-400">Shipping Address</p>
+                    <div className="mt-4 space-y-4">
+                      <input
+                        type="text"
+                        value={street}
+                        onChange={(e) => setStreet(e.target.value)}
+                        placeholder="Street"
+                        className="w-full border border-stone-200 px-4 py-3 outline-none focus:border-black"
+                      />
+                      <div className="grid grid-cols-2 gap-4">
+                        <input
+                          type="text"
+                          value={city}
+                          onChange={(e) => setCity(e.target.value)}
+                          placeholder="City"
+                          className="w-full border border-stone-200 px-4 py-3 outline-none focus:border-black"
+                        />
+                        <input
+                          type="text"
+                          value={stateName}
+                          onChange={(e) => setStateName(e.target.value)}
+                          placeholder="State"
+                          className="w-full border border-stone-200 px-4 py-3 outline-none focus:border-black"
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <input
+                          type="text"
+                          value={zipCode}
+                          onChange={(e) => setZipCode(e.target.value)}
+                          placeholder="Zip Code"
+                          className="w-full border border-stone-200 px-4 py-3 outline-none focus:border-black"
+                        />
+                        <input
+                          type="text"
+                          value={country}
+                          onChange={(e) => setCountry(e.target.value)}
+                          placeholder="Country"
+                          className="w-full border border-stone-200 px-4 py-3 outline-none focus:border-black"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-lg border border-stone-200 bg-stone-50 p-4">
+                    <p className="text-[10px] uppercase tracking-[0.35em] text-stone-500 mb-2">Payment Method</p>
+                    <div className="flex items-center gap-3">
+                      <span className="inline-flex items-center justify-center rounded-full bg-stone-900 text-white px-3 py-2 text-[11px] uppercase tracking-[0.2em]">Cash on Delivery</span>
+                      <span className="text-sm text-stone-500">Pay when your order arrives.</span>
+                    </div>
+                  </div>
+
+                  {orderMessage && <p className="text-sm text-red-600">{orderMessage}</p>}
+                  {orderSuccess && <p className="text-sm text-green-700">{orderSuccess}</p>}
+
+                  <button
+                    type="button"
+                    disabled={isSubmittingOrder}
+                    onClick={handleSubmitOrder}
+                    className="w-full px-6 py-4 border border-black bg-black text-white uppercase tracking-[0.2em] disabled:opacity-60"
+                  >
+                    {isSubmittingOrder ? 'Saving Order...' : 'Done'}
+                  </button>
+                </div>
+              )}
+            </div>
+          </aside>
+        </div>
+      )}
     </div>
   );
 }

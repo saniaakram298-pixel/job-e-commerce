@@ -29,51 +29,56 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     }
 
     const body = await request.json();
-    const fallbackTag = String(body.collection || '').trim() || 'Collection';
-    const tags = normalizeTags(body.tags, fallbackTag);
-    const sizes = normalizeSizes(body.sizes, body.stock || 0);
+    const existingCollection = await Collection.findById(id);
 
-    const updatedCollection = await Collection.findByIdAndUpdate(
-      id,
-      {
-        title: body.title,
-        collection: body.collection,
-        img: body.img,
-        video: body.video || null,
-        category: body.category,
-        stock: Number(body.stock || sizes.reduce((sum: number, item: any) => sum + item.stock, 0)),
-        price: Number(body.price || 0),
-        description: body.description || '',
-        tags,
-        sizes,
-      },
-      { new: true }
-    );
-
-    if (!updatedCollection) {
+    if (!existingCollection) {
       return NextResponse.json({ error: 'Collection not found' }, { status: 404 });
     }
 
+    const existingData = existingCollection.toObject ? (existingCollection.toObject() as any) : existingCollection;
+    const fallbackTag = String(body.collection ?? existingData.collection ?? '').trim() || 'Collection';
+    const tags = body.tags !== undefined ? normalizeTags(body.tags, fallbackTag) : existingData.tags || [];
+    const sizes = body.sizes !== undefined
+      ? normalizeSizes(body.sizes, (body.stock ?? existingData.stock) || 0)
+      : existingData.sizes || normalizeSizes(undefined, (body.stock ?? existingData.stock) || 0);
+    const updatedStock = body.stock !== undefined
+      ? Number(body.stock) || sizes.reduce((sum: number, item: any) => sum + item.stock, 0)
+      : existingData.stock;
+
+    if (body.title !== undefined) existingCollection.set('title', String(body.title || existingData.title));
+    if (body.collection !== undefined) existingCollection.set('collection', String(body.collection || existingData.collection));
+    if (body.category !== undefined) existingCollection.set('category', String(body.category || existingData.category));
+    if (body.price !== undefined) existingCollection.set('price', Number(body.price) || 0);
+    if (body.description !== undefined) existingCollection.set('description', String(body.description || existingData.description || ''));
+    if (body.img !== undefined) existingCollection.set('img', String(body.img || existingData.img));
+    if (body.video !== undefined) existingCollection.set('video', body.video ? String(body.video) : null);
+    if (body.tags !== undefined || body.collection !== undefined) existingCollection.set('tags', tags);
+    if (body.sizes !== undefined) existingCollection.set('sizes', sizes);
+    existingCollection.set('stock', updatedStock);
+
+    const savedCollection = await existingCollection.save();
+
     try {
-      const pid = (updatedCollection as any).productId;
+      const pid = (savedCollection as any).productId;
       const productUpdate: any = {
-        name: updatedCollection.title,
-        description: updatedCollection.description || updatedCollection.title,
-        price: updatedCollection.price || 0,
-        category: updatedCollection.category,
-        collection: updatedCollection.collection || String(updatedCollection.tags?.[0] || '').trim(),
-        images: updatedCollection.img ? [updatedCollection.img] : [],
-        tags: updatedCollection.tags && updatedCollection.tags.length > 0
-          ? updatedCollection.tags
-          : [updatedCollection.collection || ''],
-        sizes: updatedCollection.sizes || [{ size: 'Free Size', stock: updatedCollection.stock || 0 }],
+        name: savedCollection.title,
+        description: savedCollection.description || savedCollection.title,
+        price: savedCollection.price || 0,
+        category: savedCollection.category,
+        collection: savedCollection.collection || String(savedCollection.tags?.[0] || '').trim(),
+        images: savedCollection.img ? [savedCollection.img] : [],
+        tags: savedCollection.tags && savedCollection.tags.length > 0
+          ? savedCollection.tags
+          : [savedCollection.collection || ''],
+        sizes: savedCollection.sizes || [{ size: 'Free Size', stock: savedCollection.stock || 0 }],
+        stock: savedCollection.stock || 0,
         active: true,
       };
 
       if (pid && mongoose.Types.ObjectId.isValid(String(pid))) {
         await Product.findByIdAndUpdate(pid, productUpdate, { new: true });
       } else {
-        await Product.findOneAndUpdate({ name: updatedCollection.title }, productUpdate, { new: true });
+        await Product.findOneAndUpdate({ name: savedCollection.title }, productUpdate, { new: true });
       }
     } catch (syncErr) {
       console.warn('Failed to sync mirrored Product on collection update:', syncErr);
@@ -86,7 +91,17 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
       /* non-fatal */
     }
 
-    return NextResponse.json(updatedCollection, { status: 200 });
+    const plain = (savedCollection as any).toObject ? (savedCollection as any).toObject() : savedCollection;
+    if (plain._id && typeof plain._id !== 'string') plain._id = String(plain._id);
+    if (plain.productId && typeof plain.productId !== 'string') plain.productId = String(plain.productId);
+    if (Array.isArray(plain.sizes)) {
+      plain.sizes = plain.sizes.map((size: any) => ({
+        size: String(size?.size ?? '').trim(),
+        stock: Number(size?.stock ?? 0),
+      }));
+    }
+
+    return NextResponse.json(plain, { status: 200 });
   } catch (error) {
     console.error('Error updating collection:', error);
     return NextResponse.json({ error: 'Failed to update collection' }, { status: 500 });

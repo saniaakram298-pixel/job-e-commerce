@@ -1,6 +1,7 @@
 "use client";
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useQuery } from '@tanstack/react-query';
 import {
     LayoutGrid, Package, Layers, Truck, Sun, Moon,
     LogOut, ArrowUpRight, AlertCircle
@@ -27,14 +28,76 @@ interface DashboardClientProps {
     initialError?: string | null;
 }
 
+async function fetchCollectionsFromApi(): Promise<CollectionItem[]> {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 25000); // 25s timeout
+
+    try {
+        const res = await fetch('/api/collections', {
+            cache: 'no-store',
+            signal: controller.signal,
+        });
+
+        if (!res.ok) {
+            const data = await res.json().catch(() => ({}));
+            const error = new Error(data?.error || 'Unable to load collections from the API.');
+            (error as any).status = res.status;
+            throw error;
+        }
+
+        const data = await res.json();
+
+        if (Array.isArray(data)) {
+            return data;
+        }
+
+        if (data?.collections && Array.isArray(data.collections)) {
+            return data.collections;
+        }
+
+        return [];
+    } catch (error: any) {
+        if (error.name === 'AbortError') {
+            const timeoutError = new Error('Request timeout: MongoDB query took too long');
+            (timeoutError as any).status = 503;
+            throw timeoutError;
+        }
+        throw error;
+    } finally {
+        clearTimeout(timeoutId);
+    }
+}
+
 export default function AtelierDashboardClient({ collections: initialCollections, initialError }: DashboardClientProps) {
     const router = useRouter();
     const { logout, user } = useAuthStore();
     const [activeTab, setActiveTab] = useState('overview');
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-    const [collections, setCollections] = useState<CollectionItem[]>(initialCollections);
     const [darkMode, setDarkMode] = useState(false);
-    const [serverError, setServerError] = useState<string | null>(initialError ?? null);
+    const [manualRetryCount, setManualRetryCount] = useState(0);
+
+    const query = useQuery<CollectionItem[], Error>({
+        queryKey: ['admin-collections', manualRetryCount],
+        queryFn: fetchCollectionsFromApi,
+        initialData: initialCollections,
+        staleTime: 1000 * 60 * 2,
+        refetchOnWindowFocus: false,
+        refetchOnMount: 'always',
+        retry: 3,
+        retryDelay: (attemptIndex: number) => Math.min(1000 * Math.pow(2, attemptIndex), 10000),
+    });
+
+    const { data: collections = [], error, isLoading, isFetching, refetch } = query;
+
+    const serverError = error?.message ?? initialError ?? null;
+    const isRetrying = isFetching && collections.length > 0;
+    const isInitialLoad = isLoading && collections.length === 0;
+    const hasError = serverError !== null && collections.length === 0;
+
+    const handleManualRetry = async () => {
+        setManualRetryCount((prev) => prev + 1);
+        await refetch();
+    };
 
     const userName = user?.firstName || "Admin";
 
@@ -43,41 +106,15 @@ export default function AtelierDashboardClient({ collections: initialCollections
         router.push('/login');
     };
 
-    const fetchCollections = async () => {
-        try {
-            const res = await fetch('/api/collections', { cache: 'no-store' });
-            const data = await res.json();
-            if (!res.ok) {
-                setServerError(data?.error || 'Unable to load collections from the API.');
-                return;
-            }
-            if (Array.isArray(data)) {
-                setCollections(data);
-            } else if (data?.collections && Array.isArray(data.collections)) {
-                setCollections(data.collections);
-            } else {
-                setCollections([]);
-            }
-        } catch (error) {
-            console.error("Fetch Error:", error);
-            setServerError('Unable to load collections from the API.');
-        }
-    };
-
-    useEffect(() => {
-        if (initialCollections.length === 0) {
-            fetchCollections();
-        }
-    }, [initialCollections.length]);
-
     const stats = useMemo(() => {
-        const totalStock = collections.reduce((acc, curr) => acc + (curr.stock || 0), 0);
-        const totalValue = collections.reduce((acc, curr) => acc + (curr.price || 0), 0);
+        const safeCollections = Array.isArray(collections) ? collections : [];
+        const totalStock = safeCollections.reduce((acc: number, curr: CollectionItem) => acc + (curr.stock || 0), 0);
+        const totalValue = safeCollections.reduce((acc: number, curr: CollectionItem) => acc + (curr.price || 0), 0);
         return {
-            totalItems: collections.length,
+            totalItems: safeCollections.length,
             stock: totalStock,
             value: totalValue.toLocaleString(),
-            lowStock: collections.filter(c => c.stock < 5).length
+            lowStock: safeCollections.filter((c: CollectionItem) => c.stock < 5).length
         };
     }, [collections]);
 
@@ -139,13 +176,57 @@ export default function AtelierDashboardClient({ collections: initialCollections
             </aside>
 
             <main className="flex-1 overflow-y-auto p-4 md:p-8 lg:p-12">
-                {serverError && (
-                    <div className="mb-8 rounded-3xl border border-red-500/30 bg-red-500/10 p-6 text-sm text-red-100">
-                        <h2 className="font-bold text-white">Dashboard unavailable</h2>
-                        <p>{serverError}</p>
-                        <p className="mt-2 text-neutral-300">Verify MongoDB connectivity and environment configuration to restore dashboard data.</p>
+                {isInitialLoad && (
+                    <div className="mb-8 rounded-3xl border border-blue-500/30 bg-blue-500/10 p-6 text-sm text-blue-100">
+                        <div className="flex items-center gap-3">
+                            <div className="animate-spin rounded-full h-5 w-5 border-2 border-blue-400 border-t-blue-200"></div>
+                            <div>
+                                <h2 className="font-bold text-white">Loading Dashboard</h2>
+                                <p>Connecting to MongoDB and fetching your inventory...</p>
+                            </div>
+                        </div>
                     </div>
                 )}
+
+                {hasError && (
+                    <div className="mb-8 rounded-3xl border border-red-500/30 bg-red-500/10 p-6 text-sm text-red-100 space-y-4">
+                        <div>
+                            <h2 className="font-bold text-white">Dashboard Data Unavailable</h2>
+                            <p>{serverError}</p>
+                            <p className="mt-2 text-neutral-300 text-xs">
+                                This usually means MongoDB is temporarily unreachable or the query timed out. Verify that:
+                            </p>
+                            <ul className="mt-1 ml-4 text-xs space-y-1 text-neutral-300 list-disc">
+                                <li>Your MONGODB_URI is correctly configured in .env.local</li>
+                                <li>Your MongoDB Atlas IP whitelist includes your current IP</li>
+                                <li>Your MongoDB cluster is running and accessible</li>
+                            </ul>
+                        </div>
+                        <button
+                            onClick={handleManualRetry}
+                            disabled={isFetching}
+                            className="px-6 py-2 rounded-lg bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 text-red-200 text-sm font-semibold uppercase tracking-[0.2em] transition disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            {isFetching ? 'Retrying...' : 'Retry Now'}
+                        </button>
+                    </div>
+                )}
+
+                {isRetrying && (
+                    <div className="mb-8 rounded-3xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-100">
+                        <div className="flex items-center gap-2">
+                            <div className="animate-spin rounded-full h-4 w-4 border-2 border-amber-400 border-t-amber-200"></div>
+                            <p>Refreshing inventory from server...</p>
+                        </div>
+                    </div>
+                )}
+
+                {serverError && !hasError && collections.length > 0 && (
+                    <div className="mb-8 rounded-3xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-100">
+                        <p>{serverError} (showing cached data)</p>
+                    </div>
+                )}
+                
                 {activeTab === 'overview' && (
                     <div className="animate-in fade-in duration-700 space-y-8">
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -161,11 +242,13 @@ export default function AtelierDashboardClient({ collections: initialCollections
                     <div className="space-y-10">
                         <Home 
                             collections={collections} 
-                            onUpdate={fetchCollections} 
+                            onUpdate={() => refetch().then(() => {})}
+                            isLoading={isFetching}
                         />
                         <CollectionAdmin 
                             collections={collections} 
-                            onUpdate={fetchCollections} 
+                            onUpdate={() => refetch().then(() => {})} 
+                            isLoading={isFetching}
                         />
                     </div>
                 )}

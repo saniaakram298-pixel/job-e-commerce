@@ -56,8 +56,15 @@ export interface Cart {
   updatedAt: string;
 }
 
+export interface ProductRef {
+  _id: string;
+  name: string;
+  images: string[];
+  img?: string;
+}
+
 export interface OrderItem {
-  productId: string;
+  productId: string | ProductRef;
   name: string;
   quantity: number;
   price: number;
@@ -68,15 +75,23 @@ export interface OrderItem {
 export interface Order {
   _id: string;
   userId: string;
+  orderNumber: number;
   items: OrderItem[];
   totalPrice: number;
   shippingAddress: Address;
   billingAddress: Address;
+  customerName?: string;
+  customerEmail?: string;
   paymentMethod: string;
   paymentStatus: 'pending' | 'completed' | 'failed';
   orderStatus: 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
   trackingNumber?: string;
   notes?: string;
+  followUpNotes?: Array<{
+    message: string;
+    timestamp: string;
+    sentBy?: string;
+  }>;
   createdAt: string;
   updatedAt: string;
 }
@@ -117,6 +132,7 @@ export interface Arrival {
   featured?: boolean;
   collection?: string;
   _id?: string;
+  stock?: number;
 }
 
 export interface NavLink {
@@ -129,6 +145,7 @@ export interface HeroData {
   buttonText: string;
   imagePath: string;
   href: string;
+  subtitle?: string;
 }
 
 export interface Category {

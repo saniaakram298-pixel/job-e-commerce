@@ -2,6 +2,7 @@ import { ReactNode } from 'react';
 import '@/styles/globals.css';
 import { CartProvider } from '@/context/CartContext'; // Import context
 import GlobalSanitizer from '@/components/GlobalSanitizer';
+import ReactQueryProvider from '@/components/ReactQueryProvider';
 
 export const metadata = {
   title: 'The Atelier - Luxury Fashion E-commerce',
@@ -28,8 +29,10 @@ export default function RootLayout({
       <body className="bg-background text-on-surface selection:bg-primary-fixed selection:text-on-primary-fixed">
         {/* CartProvider ko yahan wrap kar diya hai */}
         <CartProvider>
-          <GlobalSanitizer />
-          {children}
+          <ReactQueryProvider>
+            <GlobalSanitizer />
+            {children}
+          </ReactQueryProvider>
         </CartProvider>
       </body>
     </html>
