@@ -28,12 +28,12 @@ interface DashboardClientProps {
     initialError?: string | null;
 }
 
-async function fetchCollectionsFromApi(): Promise<CollectionItem[]> {
+async function fetchCollectionsFromApi(): Promise<{ collections: CollectionItem[]; total: number }> {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 25000); // 25s timeout
 
     try {
-        const res = await fetch('/api/collections', {
+        const res = await fetch('/api/collections?page=1&limit=1000', {
             cache: 'no-store',
             signal: controller.signal,
         });
@@ -46,16 +46,10 @@ async function fetchCollectionsFromApi(): Promise<CollectionItem[]> {
         }
 
         const data = await res.json();
+        const collections = Array.isArray(data.collections) ? data.collections : [];
+        const total = typeof data?.pagination?.total === 'number' ? data.pagination.total : collections.length;
 
-        if (Array.isArray(data)) {
-            return data;
-        }
-
-        if (data?.collections && Array.isArray(data.collections)) {
-            return data.collections;
-        }
-
-        return [];
+        return { collections, total };
     } catch (error: any) {
         if (error.name === 'AbortError') {
             const timeoutError = new Error('Request timeout: MongoDB query took too long');
@@ -76,10 +70,10 @@ export default function AtelierDashboardClient({ collections: initialCollections
     const [darkMode, setDarkMode] = useState(false);
     const [manualRetryCount, setManualRetryCount] = useState(0);
 
-    const query = useQuery<CollectionItem[], Error>({
+    const query = useQuery<{ collections: CollectionItem[]; total: number }, Error>({
         queryKey: ['admin-collections', manualRetryCount],
         queryFn: fetchCollectionsFromApi,
-        initialData: initialCollections,
+        initialData: { collections: initialCollections, total: initialCollections?.length ?? 0 },
         staleTime: 1000 * 60 * 2,
         refetchOnWindowFocus: false,
         refetchOnReconnect: false,
@@ -89,7 +83,9 @@ export default function AtelierDashboardClient({ collections: initialCollections
         retryDelay: (attemptIndex: number) => Math.min(1000 * Math.pow(2, attemptIndex), 10000),
     });
 
-    const { data: collections = [], error, isLoading, isFetching, refetch } = query;
+    const collections = query.data?.collections ?? initialCollections ?? [];
+    const totalItems = query.data?.total ?? collections.length;
+    const { error, isLoading, isFetching, refetch } = query;
 
     const serverError = error?.message ?? initialError ?? null;
     const isRetrying = isFetching && collections.length > 0;
@@ -113,12 +109,12 @@ export default function AtelierDashboardClient({ collections: initialCollections
         const totalStock = safeCollections.reduce((acc: number, curr: CollectionItem) => acc + (curr.stock || 0), 0);
         const totalValue = safeCollections.reduce((acc: number, curr: CollectionItem) => acc + (curr.price || 0), 0);
         return {
-            totalItems: safeCollections.length,
+            totalItems,
             stock: totalStock,
             value: totalValue.toLocaleString(),
             lowStock: safeCollections.filter((c: CollectionItem) => c.stock < 5).length
         };
-    }, [collections]);
+    }, [collections, totalItems]);
 
     const toggleTheme = () => setDarkMode(!darkMode);
 
@@ -220,11 +216,13 @@ export default function AtelierDashboardClient({ collections: initialCollections
                     <div className="space-y-10">
                         <Home 
                             collections={collections} 
+                            totalItems={totalItems}
                             onUpdate={() => refetch().then(() => {})}
                             isLoading={isFetching}
                         />
                         <CollectionAdmin 
                             collections={collections} 
+                            totalItems={totalItems}
                             onUpdate={() => refetch().then(() => {})} 
                             isLoading={isFetching}
                         />

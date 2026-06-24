@@ -19,6 +19,7 @@ export interface Collection {
 
 interface CollectionsProps {
   collections?: Collection[];
+  totalItems?: number;
   onUpdate?: () => Promise<void>;
   isLoading?: boolean;
   initialSection?: string;
@@ -38,6 +39,7 @@ interface EditPayload {
 
 export const Home: React.FC<CollectionsProps> = ({
   collections = [],
+  totalItems,
   onUpdate,
   isLoading = false,
   initialSection = 'new-arrival',
@@ -49,7 +51,8 @@ export const Home: React.FC<CollectionsProps> = ({
   const [displaySection, setDisplaySection] = useState(initialSection);
   const showSectionTabs = !showAllSections;
   const [showForm, setShowForm] = useState(false);
-  const [isLoadingData, setIsLoadingData] = useState(Boolean(isLoading));
+  const [placement, setPlacement] = useState<'home' | 'collection'>('home');
+  const [isLoadingData, setIsLoadingData] = useState(Boolean(isLoading && collections.length === 0));
   const [loading, setLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
@@ -94,8 +97,8 @@ export const Home: React.FC<CollectionsProps> = ({
   }, [collections]);
 
   useEffect(() => {
-    setIsLoadingData(Boolean(isLoading));
-  }, [isLoading]);
+    setIsLoadingData(Boolean(isLoading && collections.length === 0));
+  }, [isLoading, collections.length]);
 
   const stats = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -263,6 +266,30 @@ export const Home: React.FC<CollectionsProps> = ({
     await handleUpdate(updatedItem);
   };
 
+  const handleSectionChange = async (item: Collection, newSection: string) => {
+    if (item.collection === newSection) return;
+    setLoading(true);
+    setErrorMessage('');
+
+    try {
+      const response = await fetch(`/api/collections/${item._id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ collection: newSection, tags: [sections.find(s => s.id === newSection)?.label || newSection] }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || 'Section update failed');
+      setLocalCollections(prev => prev.map(prevItem => (prevItem._id === result._id ? result : prevItem)));
+      setSuccessMessage(`Updated section for "${result.title}".`);
+      if (onUpdate) await onUpdate();
+      setTimeout(() => setSuccessMessage(''), 2500);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : 'Unable to update section.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -277,6 +304,9 @@ export const Home: React.FC<CollectionsProps> = ({
     const detailImageUrls = detailImages.length > 0 ? await readFilesAsDataURLs(detailImages) : [];
     const images = [imagePreview, ...detailImageUrls].filter(Boolean);
 
+    const selectedCollection = placement === 'collection' ? 'our-collection' : displaySection;
+    const selectedTag = placement === 'collection' ? 'Our Collection' : sections.find(s => s.id === selectedCollection)?.label || '';
+
     const productData = {
       title,
       description,
@@ -284,8 +314,8 @@ export const Home: React.FC<CollectionsProps> = ({
       category,
       img: imagePreview,
       images,
-      collection: displaySection,
-      tags: [sections.find(s => s.id === displaySection)?.label || '', badge].filter(Boolean),
+      collection: selectedCollection,
+      tags: [selectedTag, badge].filter(Boolean),
       stock: Number(stock) || 10,
       sizes: [{ size: 'Free Size', stock: Number(stock) || 10 }],
     };
@@ -326,18 +356,20 @@ export const Home: React.FC<CollectionsProps> = ({
         <div className="text-center py-20 text-neutral-500">Loading your inventory...</div>
       ) : (
         <>
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-5">
-            <div className="col-span-2 p-7 rounded-2xl bg-gradient-to-br from-[#E5A93A] to-[#8C6219] text-black shadow-[0_10px_30px_rgba(229,169,58,0.2)] flex flex-col justify-between">
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-3 lg:grid-cols-4">
+            <div className="col-span-1 md:col-span-3 lg:col-span-4 p-7 rounded-2xl bg-gradient-to-br from-[#E5A93A] to-[#8C6219] text-black shadow-[0_10px_30px_rgba(229,169,58,0.2)] flex flex-col justify-between">
               <div className="flex justify-between items-start">
                 <Package className="w-10 h-10 opacity-90" />
                 <span className="bg-black/10 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-tighter">Live Database</span>
               </div>
               <div className="mt-6">
-                <h3 className="text-4xl font-black leading-none">{localCollections.length}</h3>
+                <h3 className="text-4xl font-black leading-none">{totalItems ?? localCollections.length}</h3>
                 <p className="text-xs uppercase tracking-[0.2em] font-bold mt-1 opacity-80">Total Inventory Items</p>
               </div>
             </div>
+          </div>
 
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
             {categories.map(cat => (
               <div key={cat} className="p-5 rounded-2xl border border-neutral-800 bg-[#121212] hover:bg-[#181818] hover:border-[#E5A93A] transition-all group cursor-default">
                 <p className="text-[9px] text-neutral-500 uppercase tracking-widest mb-2 font-bold group-hover:text-[#E5A93A]">{cat}</p>
@@ -440,6 +472,17 @@ export const Home: React.FC<CollectionsProps> = ({
                     {categories.map(cat => (
                       <option key={cat} value={cat}>{cat.toUpperCase()}</option>
                     ))}
+                  </select>
+                </label>
+                <label className="space-y-2 text-sm">
+                  <span className="text-neutral-400 uppercase tracking-[0.2em] text-[10px]">Product Placement</span>
+                  <select
+                    value={placement}
+                    onChange={e => setPlacement(e.target.value as 'home' | 'collection')}
+                    className="w-full bg-[#111] border border-neutral-800 rounded-xl px-4 py-3 text-white outline-none"
+                  >
+                    <option value="home">Home Page</option>
+                    <option value="collection">Collection Page</option>
                   </select>
                 </label>
                 <label className="space-y-2 text-sm md:col-span-2">
@@ -646,59 +689,61 @@ export const Home: React.FC<CollectionsProps> = ({
             )}
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+          <div className="overflow-x-auto rounded-3xl border border-neutral-800 bg-[#111] p-4">
             {visibleCollections.length > 0 ? (
-              visibleCollections.map(item => (
-                <div key={item._id} className="relative h-[400px] rounded-[2rem] overflow-hidden border border-neutral-800 bg-[#111] group transition-all hover:border-[#E5A93A]/50">
-                  <img src={item.img} alt={item.title} className="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:scale-105 group-hover:opacity-40 transition duration-1000" />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent"></div>
-
-                  <div className="absolute top-6 left-6 flex flex-col gap-2">
-                    {(item.tags || (item.tag ? [item.tag] : [])).filter(Boolean).map((t, idx) => (
-                      <span key={idx} className="bg-[#E5A93A] text-black text-[9px] font-black px-3 py-1 rounded-full uppercase tracking-tighter w-fit">
-                        {t}
-                      </span>
-                    ))}
-                    <span className="bg-white/5 backdrop-blur-md border border-white/10 text-white text-[9px] font-bold px-3 py-1 rounded-full uppercase tracking-widest w-fit">
-                      {item.category}
-                    </span>
-                  </div>
-
-                  <div className="absolute top-6 right-6 flex items-center gap-2">
-                    <button
-                      onClick={() => startEditing(item)}
-                      className="rounded-full bg-white/10 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.2em] text-white hover:bg-[#E5A93A] transition"
-                    >
-                      <Pencil className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      onClick={() => handleDelete(item._id)}
-                      className="rounded-full bg-black/70 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.2em] text-white hover:bg-red-500/90 transition"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-
-                  <div className="absolute top-6 right-6">
-                    <p className="text-[#E5A93A] text-xl font-bold font-mono tracking-tighter">${item.price}</p>
-                  </div>
-
-                  <div className="absolute bottom-8 left-8 right-8">
-                    <h4 className="text-2xl font-light text-white tracking-wide uppercase mb-4 group-hover:text-[#E5A93A] transition-colors">{item.title}</h4>
-                    <div className="flex items-center justify-between translate-y-4 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-500 border-t border-white/10 pt-4">
-                      <div className="flex flex-col">
-                        <p className="text-[10px] text-neutral-500 uppercase font-bold">In Stock</p>
-                        <p className="text-white font-mono">{item.stock}</p>
-                      </div>
-                      <button className="bg-white/10 hover:bg-white/20 p-3 rounded-full transition-colors">
-                        <Eye className="w-5 h-5 text-white" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ))
+              <table className="min-w-full border-collapse text-left text-sm text-white">
+                <thead>
+                  <tr className="border-b border-neutral-800 text-[10px] uppercase tracking-[0.3em] text-neutral-400">
+                    <th className="px-4 py-3">Image</th>
+                    <th className="px-4 py-3">Title</th>
+                    <th className="px-4 py-3">Price</th>
+                    <th className="px-4 py-3">Description</th>
+                    <th className="px-4 py-3">Section</th>
+                    <th className="px-4 py-3">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {visibleCollections.map(item => (
+                    <tr key={item._id} className="border-b border-neutral-800 hover:bg-white/5">
+                      <td className="px-4 py-4 align-middle">
+                        <img src={item.img} alt={item.title} className="h-16 w-16 rounded-2xl object-cover" />
+                      </td>
+                      <td className="px-4 py-4 align-middle font-semibold text-white">{item.title}</td>
+                      <td className="px-4 py-4 align-middle text-[#E5A93A]">${item.price}</td>
+                      <td className="px-4 py-4 align-middle text-neutral-400 truncate max-w-[300px]">{item.description || '-'}</td>
+                      <td className="px-4 py-4 align-middle">
+                        <select
+                          value={item.collection || 'our-collection'}
+                          onChange={e => handleSectionChange(item, e.target.value)}
+                          className="w-full bg-[#111] border border-neutral-800 rounded-xl px-3 py-2 text-white outline-none"
+                        >
+                          {sections.map(sec => (
+                            <option key={sec.id} value={sec.id}>{sec.label}</option>
+                          ))}
+                        </select>
+                      </td>
+                      <td className="px-4 py-4 align-middle flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => startEditing(item)}
+                          className="rounded-full bg-white/10 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.2em] text-white hover:bg-[#E5A93A] transition"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(item._id)}
+                          className="rounded-full bg-black/70 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.2em] text-white hover:bg-red-500/90 transition"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             ) : (
-              <div className="col-span-full py-32 text-center border-2 border-dashed border-neutral-900 rounded-[3rem] bg-[#080808]">
+              <div className="py-32 text-center">
                 <div className="w-20 h-20 bg-neutral-900 rounded-full flex items-center justify-center mx-auto mb-6">
                   <Search className="w-8 h-8 text-neutral-700" />
                 </div>
