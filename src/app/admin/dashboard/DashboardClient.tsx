@@ -189,7 +189,7 @@ export default function AtelierDashboardClient({ collections: initialCollections
                 )}
 
                 {hasError && (
-                    <div className="mb-8 rounded-3xl border border-red-500/30 bg-red-500/10 p-6 text-sm text-red-100 space-y-4">
+                    <div className="mb-8 rounded-3xl border border-red-500/30 bg-red-500/10 p-6 text-sm text-red-100 space-y-4 hidden" aria-hidden="true">
                         <div>
                             <h2 className="font-bold text-white">Dashboard Data Unavailable</h2>
                             <p>{serverError}</p>
