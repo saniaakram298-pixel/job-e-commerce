@@ -82,7 +82,9 @@ export default function AtelierDashboardClient({ collections: initialCollections
         initialData: initialCollections,
         staleTime: 1000 * 60 * 2,
         refetchOnWindowFocus: false,
-        refetchOnMount: 'always',
+        refetchOnReconnect: false,
+        refetchOnMount: false,
+        placeholderData: (previousData: any) => previousData,
         retry: 3,
         retryDelay: (attemptIndex: number) => Math.min(1000 * Math.pow(2, attemptIndex), 10000),
     });
@@ -189,7 +191,7 @@ export default function AtelierDashboardClient({ collections: initialCollections
                 )}
 
                 {hasError && (
-                    <div className="mb-8 rounded-3xl border border-red-500/30 bg-red-500/10 p-6 text-sm text-red-100 space-y-4 hidden" aria-hidden="true">
+                    <div className="mb-8 rounded-3xl border border-red-500/30 bg-red-500/10 p-6 text-sm text-red-100 space-y-4">
                         <div>
                             <h2 className="font-bold text-white">Dashboard Data Unavailable</h2>
                             <p>{serverError}</p>
@@ -271,3 +273,7 @@ function StatCard({ label, value, trend, icon, darkMode }: { label: string, valu
         </div>
     );
 }
+function setManualRetryCount(arg0: (prev: any) => any) {
+    throw new Error('Function not implemented.');
+}
+
