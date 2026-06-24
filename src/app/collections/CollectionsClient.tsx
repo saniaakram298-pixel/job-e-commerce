@@ -86,7 +86,7 @@ export default function CollectionsClient() {
     },
     retry: 2,
     staleTime: 1000 * 60 * 5,
-    keepPreviousData: true,
+   placeholderData: (previousData: any, previousQuery: any) => previousData,
     refetchOnWindowFocus: true,
     refetchInterval: 1000 * 30,
     refetchIntervalInBackground: true,
