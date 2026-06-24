@@ -3,6 +3,7 @@ import { connectDB } from '@/lib/mongodb';
 import { Order } from '@/models/Order';
 import { getAuthToken, getUserIdFromToken } from '@/lib/response';
 import { User } from '@/models/User';
+import { sendOrderConfirmationEmail } from '@/lib/email';
 
 export const dynamic = 'force-dynamic';
 
@@ -95,6 +96,28 @@ export async function POST(request: NextRequest) {
     });
 
     await order.save();
+
+    if (!order.customerEmail) {
+      return NextResponse.json(
+        { success: false, error: 'Customer email not available for this order' },
+        { status: 400 }
+      );
+    }
+
+    try {
+      await sendOrderConfirmationEmail({
+        to: order.customerEmail,
+        subject: `Reminder: Follow-up on order #${order.orderNumber ?? order._id}`,
+        text: message,
+        html: `<div style="font-family: Arial, sans-serif; line-height:1.5;">${message
+          .split('\n')
+          .map((line: string) => `<p>${line}</p>`)
+          .join('')}</div>`,
+      });
+    } catch (emailError) {
+      console.error('[admin/pending-orders] Email send failed:', emailError);
+      return NextResponse.json({ success: false, error: 'Failed to send reminder email' }, { status: 500 });
+    }
 
     return NextResponse.json({ success: true, data: { orderId: order._id?.toString?.(), followUpNotes: order.followUpNotes } });
   } catch (error) {

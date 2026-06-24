@@ -127,8 +127,10 @@ export const Orders: React.FC = () => {
   const visibleOrders = filteredOrders.slice(0, visibleCount);
 
   return (
-    <div className="space-y-6">
-      <PendingOrdersAlert />
+    <div className="grid gap-6 xl:grid-cols-[360px_1fr]">
+      <div className="space-y-6">
+        <PendingOrdersAlert />
+      </div>
 
       <div className="rounded-3xl border border-neutral-200 bg-white p-6 shadow-sm">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-6">
