@@ -190,30 +190,6 @@ export default function AtelierDashboardClient({ collections: initialCollections
                     </div>
                 )}
 
-                {hasError && (
-                    <div className="mb-8 rounded-3xl border border-red-500/30 bg-red-500/10 p-6 text-sm text-red-100 space-y-4">
-                        <div>
-                            <h2 className="font-bold text-white">Dashboard Data Unavailable</h2>
-                            <p>{serverError}</p>
-                            <p className="mt-2 text-neutral-300 text-xs">
-                                This usually means MongoDB is temporarily unreachable or the query timed out. Verify that:
-                            </p>
-                            <ul className="mt-1 ml-4 text-xs space-y-1 text-neutral-300 list-disc">
-                                <li>Your MONGODB_URI is correctly configured in .env.local</li>
-                                <li>Your MongoDB Atlas IP whitelist includes your current IP</li>
-                                <li>Your MongoDB cluster is running and accessible</li>
-                            </ul>
-                        </div>
-                        <button
-                            onClick={handleManualRetry}
-                            disabled={isFetching}
-                            className="px-6 py-2 rounded-lg bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 text-red-200 text-sm font-semibold uppercase tracking-[0.2em] transition disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                            {isFetching ? 'Retrying...' : 'Retry Now'}
-                        </button>
-                    </div>
-                )}
-
                 {isRetrying && (
                     <div className="mb-8 rounded-3xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-100">
                         <div className="flex items-center gap-2">
