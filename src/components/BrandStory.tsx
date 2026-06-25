@@ -45,7 +45,7 @@ export default function BrandStory() {
 
           <div className="pt-4">
             <Link
-              href="/about"
+              href="/editorial"
               className="inline-block border-b border-black pb-2 text-[10px] uppercase tracking-[0.5em] font-bold hover:opacity-50 transition-all"
             >
               Read Our Story

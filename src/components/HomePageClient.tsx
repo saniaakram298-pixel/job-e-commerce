@@ -9,6 +9,8 @@ import TrustBadges from '@/components/TrustBadges';
 import NewArrivals from '@/components/NewArrivalsClient';
 import BestSellers from '@/components/BestSellers';
 import DepartmentsWithData from '@/components/DepartmentsWithData';
+import LimitedEditions from '@/components/LimitedEditions';
+import BrandStory from '@/components/BrandStory';
 import Footer from '@/components/Footer';
 
 const trustBadges = [
@@ -84,6 +86,8 @@ export default function HomePageClient({ bestSellers, newArrivals = [], categori
         <NewArrivals initialArrivals={newArrivals} />
         <BestSellers arrivals={bestSellers} />
         <DepartmentsWithData budget={budget} setBudget={setBudget} initialCategories={categories} />
+        <LimitedEditions />
+        <BrandStory />
       </main>
 
       <Footer />
