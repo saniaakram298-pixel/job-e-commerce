@@ -12,6 +12,8 @@ import DepartmentsWithData from '@/components/DepartmentsWithData';
 import LimitedEditions from '@/components/LimitedEditions';
 import BrandStory from '@/components/BrandStory';
 import Footer from '@/components/Footer';
+import Reviews from '@/components/Reviews';
+import WhatsAppButton from '@/components/WhatsAppButton';
 
 const trustBadges = [
   { icon: 'public', title: 'Global Shipping', desc: 'Express delivery' },
@@ -88,9 +90,11 @@ export default function HomePageClient({ bestSellers, newArrivals = [], categori
         <DepartmentsWithData budget={budget} setBudget={setBudget} initialCategories={categories} />
         <LimitedEditions />
         <BrandStory />
+        <Reviews />
       </main>
 
       <Footer />
+      <WhatsAppButton />
     </div>
   );
 }

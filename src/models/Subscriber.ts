@@ -1,3 +1,4 @@
+
 import mongoose, { Schema, Model } from 'mongoose';
 
 export interface ISubscriber {

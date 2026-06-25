@@ -1,4 +1,6 @@
-'use client';
+"use client";
+
+import Newsletter from '@/components/Newsletter';
 
 export default function Footer() {
   return (
@@ -52,6 +54,11 @@ export default function Footer() {
               <li><a href="#" className="hover:text-white transition">Pinterest</a></li>
               <li><a href="#" className="hover:text-white transition">Twitter</a></li>
             </ul>
+
+            {/* Newsletter small form */}
+            <div className="mt-6">
+              <Newsletter />
+            </div>
           </div>
         </div>
 
