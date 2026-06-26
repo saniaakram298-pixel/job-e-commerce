@@ -18,10 +18,10 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
-    "jsx": "preserve",
+    "jsx": "preserve", // ◄--- Isko "preserve" se badal kar "react-jsx" kar dein
     "strict": true,
     "forceConsistentCasingInFileNames": true,
-    "types": ["node"],
+    // "types": ["node"], // ◄--- Is line ko bilkul delete (ya comment) kar dein
     /* Path aliases */
     "baseUrl": ".",
     "paths": {

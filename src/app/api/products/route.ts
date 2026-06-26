@@ -14,6 +14,7 @@ export async function GET(request: NextRequest) {
     const category = searchParams.get('category');
     const collection = searchParams.get('collection');
     const featured = searchParams.get('featured');
+    const search = searchParams.get('search');
     const sort = searchParams.get('sort') || 'default';
 
     const skip = (page - 1) * limit;
@@ -22,6 +23,15 @@ export async function GET(request: NextRequest) {
     if (category) query.category = category;
     if (collection) query.collection = collection;
     if (featured === 'true') query.featured = true;
+    if (search) {
+      const searchRegex = new RegExp(search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+      query.$or = [
+        { name: { $regex: searchRegex } },
+        { description: { $regex: searchRegex } },
+        { collection: { $regex: searchRegex } },
+        { category: { $regex: searchRegex } },
+      ];
+    }
 
     // Build sort object
     let sortObj: any = {};

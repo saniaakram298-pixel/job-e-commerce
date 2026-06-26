@@ -1,5 +1,5 @@
 "use client";
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -25,15 +25,18 @@ interface CollectionItem {
 
 interface DashboardClientProps {
     collections: CollectionItem[];
+    total: number;
     initialError?: string | null;
 }
 
+const PAGE_SIZE = 20;
+
 async function fetchCollectionsFromApi(): Promise<{ collections: CollectionItem[]; total: number }> {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 25000); // 25s timeout
+    const timeoutId = setTimeout(() => controller.abort(), 25000); // 25s timeout for the primary fetch
 
     try {
-        const res = await fetch('/api/collections?page=1&limit=1000', {
+        const res = await fetch(`/api/collections?page=1&limit=${PAGE_SIZE}`, {
             cache: 'no-store',
             signal: controller.signal,
         });
@@ -62,18 +65,23 @@ async function fetchCollectionsFromApi(): Promise<{ collections: CollectionItem[
     }
 }
 
-export default function AtelierDashboardClient({ collections: initialCollections, initialError }: DashboardClientProps) {
+export default function AtelierDashboardClient({ collections: initialCollections, total: initialTotal, initialError }: DashboardClientProps) {
     const router = useRouter();
     const { logout, user } = useAuthStore();
     const [activeTab, setActiveTab] = useState('overview');
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [darkMode, setDarkMode] = useState(false);
     const [manualRetryCount, setManualRetryCount] = useState(0);
+    const [adminSectionView, setAdminSectionView] = useState<'home' | 'collection'>('home');
+    const [visibleCollections, setVisibleCollections] = useState<CollectionItem[]>(initialCollections);
+    const [fetchStarted, setFetchStarted] = useState(false);
+    const [hydrateStarted, setHydrateStarted] = useState(false);
 
     const query = useQuery<{ collections: CollectionItem[]; total: number }, Error>({
         queryKey: ['admin-collections', manualRetryCount],
         queryFn: fetchCollectionsFromApi,
         initialData: { collections: initialCollections, total: initialCollections?.length ?? 0 },
+        enabled: false,
         staleTime: 1000 * 60 * 2,
         refetchOnWindowFocus: false,
         refetchOnReconnect: false,
@@ -83,19 +91,82 @@ export default function AtelierDashboardClient({ collections: initialCollections
         retryDelay: (attemptIndex: number) => Math.min(1000 * Math.pow(2, attemptIndex), 10000),
     });
 
-    const collections = query.data?.collections ?? initialCollections ?? [];
-    const totalItems = query.data?.total ?? collections.length;
-    const { error, isLoading, isFetching, refetch } = query;
+    const queryCollections = query.data?.collections ?? initialCollections ?? [];
+    const totalItems = query.data?.total ?? initialTotal ?? queryCollections.length;
+    const { error, isLoading, isFetching, refetch, isSuccess } = query;
 
     const serverError = error?.message ?? initialError ?? null;
-    const isRetrying = isFetching && collections.length > 0;
-    const isInitialLoad = isLoading && collections.length === 0;
-    const hasError = serverError !== null && collections.length === 0;
+    const isRetrying = isFetching && visibleCollections.length > 0;
+    const isInitialLoad = isLoading && visibleCollections.length === 0;
+    const hasError = serverError !== null && queryCollections.length === 0;
 
     const handleManualRetry = async () => {
         setManualRetryCount((prev) => prev + 1);
         await refetch();
     };
+
+    useEffect(() => {
+        setVisibleCollections(initialCollections);
+        setFetchStarted(false);
+        setHydrateStarted(false);
+    }, [initialCollections]);
+
+    useEffect(() => {
+        if (activeTab !== 'home' || fetchStarted) return;
+
+        const timer = window.setTimeout(() => {
+            refetch().catch(() => {});
+            setFetchStarted(true);
+        }, 300);
+
+        return () => window.clearTimeout(timer);
+    }, [activeTab, fetchStarted, refetch]);
+
+    useEffect(() => {
+        if (!isSuccess) return;
+        setVisibleCollections(queryCollections);
+    }, [isSuccess, queryCollections]);
+
+    useEffect(() => {
+        if (!isSuccess || hydrateStarted || totalItems <= PAGE_SIZE) return;
+
+        let cancelled = false;
+        const totalPages = Math.max(1, Math.ceil(totalItems / PAGE_SIZE));
+
+        const hydrateRemaining = async () => {
+            await new Promise(resolve => window.setTimeout(resolve, 300));
+            for (let page = 2; page <= totalPages; page += 1) {
+                if (cancelled) return;
+                try {
+                    const pageRes = await fetch(`/api/collections?page=${page}&limit=${PAGE_SIZE}`, { cache: 'no-store' });
+                    if (!pageRes.ok) break;
+
+                    const pageData = await pageRes.json();
+                    const nextCollections = Array.isArray(pageData.collections) ? pageData.collections : [];
+
+                    for (const item of nextCollections) {
+                        if (cancelled) return;
+                        setVisibleCollections(prev => {
+                            if (prev.some(existing => existing._id === item._id)) return prev;
+                            return [...prev, item];
+                        });
+                        await new Promise(resolve => window.setTimeout(resolve, 50));
+                    }
+                } catch {
+                    break;
+                }
+            }
+
+            if (!cancelled) {
+                setHydrateStarted(true);
+            }
+        };
+
+        hydrateRemaining();
+        return () => {
+            cancelled = true;
+        };
+    }, [isSuccess, hydrateStarted, totalItems]);
 
     const userName = user?.firstName || "Admin";
 
@@ -105,7 +176,7 @@ export default function AtelierDashboardClient({ collections: initialCollections
     };
 
     const stats = useMemo(() => {
-        const safeCollections = Array.isArray(collections) ? collections : [];
+        const safeCollections = Array.isArray(visibleCollections) ? visibleCollections : [];
         const totalStock = safeCollections.reduce((acc: number, curr: CollectionItem) => acc + (curr.stock || 0), 0);
         const totalValue = safeCollections.reduce((acc: number, curr: CollectionItem) => acc + (curr.price || 0), 0);
         return {
@@ -114,7 +185,7 @@ export default function AtelierDashboardClient({ collections: initialCollections
             value: totalValue.toLocaleString(),
             lowStock: safeCollections.filter((c: CollectionItem) => c.stock < 5).length
         };
-    }, [collections, totalItems]);
+    }, [visibleCollections, totalItems]);
 
     const toggleTheme = () => setDarkMode(!darkMode);
 
@@ -195,7 +266,7 @@ export default function AtelierDashboardClient({ collections: initialCollections
                     </div>
                 )}
 
-                {serverError && !hasError && collections.length > 0 && (
+                {serverError && !hasError && queryCollections.length > 0 && (
                     <div className="mb-8 rounded-3xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-100">
                         <p>{serverError} (showing cached data)</p>
                     </div>
@@ -214,18 +285,32 @@ export default function AtelierDashboardClient({ collections: initialCollections
 
                 {activeTab === 'home' && (
                     <div className="space-y-10">
-                        <Home 
-                            collections={collections} 
-                            totalItems={totalItems}
-                            onUpdate={() => refetch().then(() => {})}
-                            isLoading={isFetching}
-                        />
-                        <CollectionAdmin 
-                            collections={collections} 
-                            totalItems={totalItems}
-                            onUpdate={() => refetch().then(() => {})} 
-                            isLoading={isFetching}
-                        />
+                        <div className="flex flex-wrap gap-3 border-b border-neutral-800 pb-4">
+                            {['home', 'collection'].map((view) => (
+                                <button
+                                    key={view}
+                                    onClick={() => setAdminSectionView(view as 'home' | 'collection')}
+                                    className={`px-4 py-3 text-sm font-bold uppercase tracking-[0.2em] transition ${adminSectionView === view ? 'text-[#E5A93A] border-b-2 border-[#E5A93A]' : 'text-neutral-500 hover:text-neutral-300'}`}
+                                >
+                                    {view === 'home' ? 'Home' : 'Collection'}
+                                </button>
+                            ))}
+                        </div>
+                        {adminSectionView === 'home' ? (
+                            <Home
+                                collections={visibleCollections}
+                                totalItems={totalItems}
+                                onUpdate={() => refetch().then(() => {})}
+                                isLoading={isFetching}
+                            />
+                        ) : (
+                            <CollectionAdmin
+                                collections={visibleCollections}
+                                totalItems={totalItems}
+                                onUpdate={() => refetch().then(() => {})}
+                                isLoading={isFetching}
+                            />
+                        )}
                     </div>
                 )}
                 {activeTab === 'orders' && <Orders />}
@@ -246,8 +331,5 @@ function StatCard({ label, value, trend, icon, darkMode }: { label: string, valu
             {trend && <p className="text-[10px] text-[#E5A93A] mt-2 font-bold uppercase">{trend}</p>}
         </div>
     );
-}
-function setManualRetryCount(arg0: (prev: any) => any) {
-    throw new Error('Function not implemented.');
 }
 

@@ -47,7 +47,7 @@ export async function GET(request: NextRequest) {
     await connectDB();
     const url = new URL(request.url);
     const page = parsePositiveInt(url.searchParams.get('page'), 1);
-    const limit = Math.min(50, parsePositiveInt(url.searchParams.get('limit'), 20));
+    const limit = Math.min(1000, parsePositiveInt(url.searchParams.get('limit'), 20));
     const skip = (page - 1) * limit;
     const category = url.searchParams.get('category')?.trim() || undefined;
     const collectionParam = url.searchParams.get('collection')?.trim() || undefined;

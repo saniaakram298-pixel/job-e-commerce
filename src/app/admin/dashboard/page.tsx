@@ -10,18 +10,23 @@ async function fetchInitialCollections() {
   try {
     await connectDB();
 
-    // Wrap queries with server-side maxTimeMS to prevent hanging queries
-    const collections = await withQueryTimeout(
-      () =>
-        CollectionModel.find()
-          .select('_id title tag img category stock price description createdAt updatedAt')
-          .sort({ createdAt: -1 })
-          .limit(20)
-          .lean()
-          .maxTimeMS(25000)
-          .exec(),
-      30000 // 30 second timeout for initial fetch
-    );
+    const [collections, total] = await Promise.all([
+      withQueryTimeout(
+        () =>
+          CollectionModel.find()
+            .select('_id title tag img category stock price description createdAt updatedAt')
+            .sort({ createdAt: -1 })
+            .limit(20)
+            .lean()
+            .maxTimeMS(25000)
+            .exec(),
+        30000
+      ),
+      withQueryTimeout(
+        () => CollectionModel.estimatedDocumentCount().maxTimeMS(10000).exec(),
+        15000
+      ),
+    ]);
 
     const sanitized = (collections || []).map((item: any) => ({
       ...item,
@@ -29,18 +34,19 @@ async function fetchInitialCollections() {
       productId: item.productId?.toString?.() ?? item.productId,
     }));
 
-    return { collections: sanitized, error: null };
+    return { collections: sanitized, total: typeof total === 'number' ? total : sanitized.length, error: null };
   } catch (error: any) {
     console.error('[admin/dashboard] fetchInitialCollections error:', error?.message ?? error);
     const errorDetails = error?.reason?.message || error?.message || String(error ?? 'Unable to load dashboard data');
     return {
       collections: [],
+      total: 0,
       error: errorDetails,
     };
   }
 }
 
 export default async function Page() {
-  const { collections, error } = await fetchInitialCollections();
-  return <DashboardClient collections={collections} initialError={error} />;
+  const { collections, total, error } = await fetchInitialCollections();
+  return <DashboardClient collections={collections} total={total} initialError={error} />;
 }

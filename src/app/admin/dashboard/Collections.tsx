@@ -56,10 +56,6 @@ export const Home: React.FC<CollectionsProps> = ({
   const [loading, setLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
-  const [page, setPage] = useState(1);
-  const [limit] = useState(20);
-  const [totalPages, setTotalPages] = useState(1);
-  const [totalCount, setTotalCount] = useState(0);
   const [stock, setStock] = useState('10');
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState('');
@@ -132,21 +128,8 @@ export const Home: React.FC<CollectionsProps> = ({
     });
   }, [localCollections, searchTerm, displaySection]);
 
-  const visibleCollections = useMemo(() => {
-    const startIndex = (page - 1) * limit;
-    return filteredCollections.slice(startIndex, startIndex + limit);
-  }, [filteredCollections, page, limit]);
+  const visibleCollections = useMemo(() => filteredCollections, [filteredCollections]);
 
-  useEffect(() => {
-    const pages = Math.max(1, Math.ceil(filteredCollections.length / limit));
-    setTotalPages(pages);
-    setTotalCount(filteredCollections.length);
-    setPage(prevPage => Math.min(prevPage, pages));
-  }, [filteredCollections, limit]);
-
-  useEffect(() => {
-    setPage(1);
-  }, [searchTerm, displaySection, showAllSections]);
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -201,7 +184,6 @@ export const Home: React.FC<CollectionsProps> = ({
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || 'Delete failed');
       setLocalCollections(prev => prev.filter(item => item._id !== id));
-      setTotalCount(prev => Math.max(0, prev - 1));
       setSuccessMessage('Product deleted successfully.');
       if (onUpdate) await onUpdate();
       setTimeout(() => setSuccessMessage(''), 2500);
@@ -330,7 +312,6 @@ export const Home: React.FC<CollectionsProps> = ({
       if (!response.ok) throw new Error(result.error || 'Failed to save product');
 
       setLocalCollections(prev => [result, ...prev]);
-      setTotalCount(prev => prev + 1);
       setSuccessMessage(`✓ "${title}" added successfully!`);
       resetForm();
       setShowForm(false);
@@ -363,7 +344,7 @@ export const Home: React.FC<CollectionsProps> = ({
                 <span className="bg-black/10 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-tighter">Live Database</span>
               </div>
               <div className="mt-6">
-                <h3 className="text-4xl font-black leading-none">{totalItems ?? localCollections.length}</h3>
+                <h3 className="text-4xl font-black leading-none">{filteredCollections.length}</h3>
                 <p className="text-xs uppercase tracking-[0.2em] font-bold mt-1 opacity-80">Total Inventory Items</p>
               </div>
             </div>
@@ -753,28 +734,6 @@ export const Home: React.FC<CollectionsProps> = ({
             )}
           </div>
 
-          <div className="flex flex-col gap-4 items-center justify-between rounded-3xl border border-neutral-800 bg-[#080808] p-5 text-sm text-neutral-400 md:flex-row">
-            <div>
-              Showing <span className="font-semibold text-white">{visibleCollections.length}</span> of <span className="font-semibold text-white">{totalCount}</span> items
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setPage(prev => Math.max(1, prev - 1))}
-                disabled={page <= 1}
-                className="rounded-xl border border-neutral-700 px-4 py-2 text-xs uppercase tracking-[0.3em] transition disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                Previous
-              </button>
-              <span className="text-white">Page {page} / {totalPages}</span>
-              <button
-                onClick={() => setPage(prev => Math.min(totalPages, prev + 1))}
-                disabled={page >= totalPages}
-                className="rounded-xl border border-neutral-700 px-4 py-2 text-xs uppercase tracking-[0.3em] transition disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                Next
-              </button>
-            </div>
-          </div>
         </>
       )}
     </div>

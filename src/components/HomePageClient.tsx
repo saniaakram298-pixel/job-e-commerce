@@ -14,6 +14,9 @@ import BrandStory from '@/components/BrandStory';
 import Footer from '@/components/Footer';
 import Reviews from '@/components/Reviews';
 import WhatsAppButton from '@/components/WhatsAppButton';
+import FilterStrip from '@/components/FilterStrip';
+import FilterDrawer from '@/components/FilterDrawer';
+import SearchOverlay from '@/components/SearchOverlay';
 
 const trustBadges = [
   { icon: 'public', title: 'Global Shipping', desc: 'Express delivery' },
@@ -38,6 +41,7 @@ interface HomePageClientProps {
 export default function HomePageClient({ bestSellers, newArrivals = [], categories = [] }: HomePageClientProps) {
   const [scrolled, setScrolled] = useState(false);
   const [budget, setBudget] = useState(5000);
+  const [showFilters, setShowFilters] = useState(false);
 
   const homepageSummary = useMemo(() => {
     const productMap = new Map<string, number>();
@@ -87,6 +91,10 @@ export default function HomePageClient({ bestSellers, newArrivals = [], categori
       <main className="max-w-[1440px] mx-auto px-6 md:px-12 space-y-20 py-12">
         <NewArrivals initialArrivals={newArrivals} />
         <BestSellers arrivals={bestSellers} />
+
+        {/* Thin filter/sort strip above collections/products */}
+        <FilterStrip onOpenFilters={() => setShowFilters(true)} />
+
         <DepartmentsWithData budget={budget} setBudget={setBudget} initialCategories={categories} />
         <LimitedEditions />
         <BrandStory />
@@ -95,6 +103,12 @@ export default function HomePageClient({ bestSellers, newArrivals = [], categori
 
       <Footer />
       <WhatsAppButton />
+
+      {/* Filter drawer for mobile */}
+      <FilterDrawer open={showFilters} onClose={() => setShowFilters(false)} />
+
+      {/* Global search overlay */}
+      <SearchOverlay />
     </div>
   );
 }

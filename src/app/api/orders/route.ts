@@ -69,7 +69,7 @@ export async function POST(request: NextRequest) {
         const color = item.color;
 
         if (!productId || !quantity || quantity <= 0) {
-          return createErrorResponse('Invalid item details in order', 400);
+          return createErrorResponse(`Invalid item details in order: productId=${productId}, quantity=${quantity}`, 400);
         }
 
         // If size provided
@@ -80,7 +80,7 @@ export async function POST(request: NextRequest) {
             { new: true }
           );
           if (!updatedProduct) {
-            return createErrorResponse(`Product ${item.name || productId} with size ${size} is out of stock`, 400);
+            return createErrorResponse(`Product "${item.name || productId}" with size "${size}" is out of stock or not found`, 400);
           }
         } else if (color) {
           const updatedProduct = await Product.findOneAndUpdate(
@@ -89,12 +89,12 @@ export async function POST(request: NextRequest) {
             { new: true }
           );
           if (!updatedProduct) {
-            return createErrorResponse(`Product ${item.name || productId} with color ${color} is out of stock`, 400);
+            return createErrorResponse(`Product "${item.name || productId}" with color "${color}" is out of stock or not found`, 400);
           }
         } else {
           const product = await Product.findById(productId);
           if (!product) {
-            return createErrorResponse(`Product ${item.name || productId} not found`, 400);
+            return createErrorResponse(`Product "${item.name || productId}" not found in database`, 400);
           }
         }
       }

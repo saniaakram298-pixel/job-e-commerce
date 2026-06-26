@@ -77,6 +77,17 @@ export default function Navbar({ scrolled }: NavbarProps) {
             scrolled ? "text-black" : "text-white"
           }`}
         >
+          {/* Search Icon - opens overlay input */}
+          <button
+            onClick={() => {
+              const ev = new CustomEvent('atelier:toggle-search', { detail: true });
+              window.dispatchEvent(ev);
+            }}
+            className="hover:scale-110 transition flex items-center"
+            aria-label="Open search"
+          >
+            <span className="material-symbols-outlined text-[22px]">search</span>
+          </button>
           <Link href="/wishlist" className="hover:scale-110 transition flex items-center">
             <span className="material-symbols-outlined text-[22px]">favorite</span>
           </Link>

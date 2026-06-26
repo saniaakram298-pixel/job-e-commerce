@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { X, ShoppingCart } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { useCart } from '@/context/CartContext';
 import { Arrival } from '@/types';
 
@@ -38,6 +39,7 @@ export default function ProductDetailModal({
   const [quantity, setQuantity] = useState(1);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const { addToCart } = useCart();
+  const router = useRouter();
 
   useEffect(() => {
     // reset selections when modal opens or product changes
@@ -60,17 +62,20 @@ export default function ProductDetailModal({
 
   const handleAddToCart = () => {
     const arrival: Arrival = {
-      id: product.id,
+      id: product._id || product.id,
       name: product.title || product.name,
       img: product.img,
       price: product.price,
       images: displayImages,
       category: product.category,
       collectionName: product.collection,
+      _id: product._id,
     } as unknown as Arrival;
 
     addToCart(arrival, quantity, selectedSize || undefined);
     onClose();
+    // Navigate to checkout page after adding to cart
+    router.push('/checkout');
   };
 
   return (
