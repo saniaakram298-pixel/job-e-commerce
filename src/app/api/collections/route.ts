@@ -56,7 +56,7 @@ export async function GET(request: NextRequest) {
     if (category) query.category = category;
     if (collectionParam) query.collection = collectionParam;
 
-    const selectFields = 'title name price img category collection stock description tags sizes createdAt';
+    const selectFields = 'title name price img category collection stock description tags sizes createdAt productId';
     const queryLabel = `Collections-Query-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
     console.time(queryLabel);

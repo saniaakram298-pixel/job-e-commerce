@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { Product, Arrival } from '@/types';
 import { useCart } from '@/context/CartContext';
+import { buildGuestOrderPayload } from '@/lib/orderPayloads';
 
 interface ProductDetailClientProps {
   product: Product;
@@ -116,33 +117,35 @@ export default function ProductDetailClient({ product }: ProductDetailClientProp
     setOrderMessage('');
 
     try {
+      const payload = buildGuestOrderPayload({
+        customerName,
+        customerEmail,
+        customerPhone,
+        shippingAddress: {
+          street,
+          city,
+          state: stateName,
+          zipCode,
+          country,
+        },
+        billingAddress: {
+          street,
+          city,
+          state: stateName,
+          zipCode,
+          country,
+        },
+        paymentMethod: 'Cash on Delivery',
+        items: orderItems,
+        totalPrice: orderItems.reduce((sum, item) => sum + item.price * item.quantity, 0),
+      });
+
       const response = await fetch('/api/guest-orders', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          customerName,
-          customerEmail,
-          customerPhone,
-          shippingAddress: {
-            street,
-            city,
-            state: stateName,
-            zipCode,
-            country,
-          },
-          billingAddress: {
-            street,
-            city,
-            state: stateName,
-            zipCode,
-            country,
-          },
-          paymentMethod: 'Cash on Delivery',
-          items: orderItems,
-          totalPrice: orderItems.reduce((sum, item) => sum + item.price * item.quantity, 0),
-        }),
+        body: JSON.stringify(payload),
       });
 
       const result = await response.json();

@@ -62,6 +62,7 @@ export const Home: React.FC<CollectionsProps> = ({
   const [price, setPrice] = useState('');
   const [description, setDescription] = useState('');
   const [badge, setBadge] = useState('');
+  const [sizesInput, setSizesInput] = useState('Free Size');
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [editingItem, setEditingItem] = useState<Collection | null>(null);
   const [editPayload, setEditPayload] = useState<EditPayload | null>(null);
@@ -167,6 +168,7 @@ export const Home: React.FC<CollectionsProps> = ({
     setStock('10');
     setDescription('');
     setBadge('');
+    setSizesInput('Free Size');
     setDetailDescription('');
     setImagePreview(null);
     setDetailImages([]);
@@ -288,6 +290,11 @@ export const Home: React.FC<CollectionsProps> = ({
 
     const selectedCollection = placement === 'collection' ? 'our-collection' : displaySection;
     const selectedTag = placement === 'collection' ? 'Our Collection' : sections.find(s => s.id === selectedCollection)?.label || '';
+    const parsedSizes = sizesInput
+      .split(',')
+      .map(size => size.trim())
+      .filter(Boolean)
+      .map(size => ({ size, stock: Number(stock) || 10 }));
 
     const productData = {
       title,
@@ -299,7 +306,7 @@ export const Home: React.FC<CollectionsProps> = ({
       collection: selectedCollection,
       tags: [selectedTag, badge].filter(Boolean),
       stock: Number(stock) || 10,
-      sizes: [{ size: 'Free Size', stock: Number(stock) || 10 }],
+      sizes: parsedSizes.length > 0 ? parsedSizes : [{ size: 'Free Size', stock: Number(stock) || 10 }],
     };
 
     try {
@@ -472,6 +479,15 @@ export const Home: React.FC<CollectionsProps> = ({
                     value={badge}
                     onChange={e => setBadge(e.target.value)}
                     placeholder="Optional tags, comma-separated"
+                    className="w-full bg-[#111] border border-neutral-800 rounded-xl px-4 py-3 text-white outline-none"
+                  />
+                </label>
+                <label className="space-y-2 text-sm md:col-span-2">
+                  <span className="text-neutral-400 uppercase tracking-[0.2em] text-[10px]">Sizes</span>
+                  <input
+                    value={sizesInput}
+                    onChange={e => setSizesInput(e.target.value)}
+                    placeholder="e.g. XS, S, M, L"
                     className="w-full bg-[#111] border border-neutral-800 rounded-xl px-4 py-3 text-white outline-none"
                   />
                 </label>

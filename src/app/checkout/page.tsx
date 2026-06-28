@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useCart } from '@/context/CartContext';
 import { X } from 'lucide-react';
+import { buildGuestOrderPayload } from '@/lib/orderPayloads';
 
 interface CartItem {
   id: string;
@@ -120,7 +121,7 @@ export default function CheckoutPage() {
       return;
     }
 
-    const orderData = {
+    const orderData = buildGuestOrderPayload({
       type: 'guest',
       customerName: formData.name,
       customerEmail: formData.email,
@@ -158,12 +159,12 @@ export default function CheckoutPage() {
       },
       paymentMethod: formData.paymentMethod,
       totalPrice: calculateTotal(),
-    };
+    });
 
     try {
       console.log('Sending order data:', JSON.stringify(orderData, null, 2));
 
-      const response = await fetch('/api/orders', {
+      const response = await fetch('/api/guest-orders', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -269,7 +270,6 @@ export default function CheckoutPage() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-semibold text-stone-900 truncate">{item.name}</p>
-                        {item.size && <p className="text-xs text-stone-600">Size: {item.size}</p>}
                         <p className="text-xs text-stone-600">Qty: {item.quantity}</p>
                         <p className="text-sm font-bold text-stone-900">{item.price}</p>
                       </div>
@@ -308,7 +308,6 @@ export default function CheckoutPage() {
                           <div>
                             <p className="font-semibold text-stone-900">{item.name}</p>
                             <p className="text-sm text-stone-600">Quantity: {item.quantity}</p>
-                            {item.size && <p className="text-sm text-stone-600">Size: {item.size}</p>}
                           </div>
                           <div className="text-right">
                             <p className="font-bold text-stone-900">
@@ -346,6 +345,24 @@ export default function CheckoutPage() {
                       <X className="w-6 h-6" />
                     </button>
                   </div>
+
+                  {cartItems.length === 1 && (
+                    <div className="mb-8 flex gap-4 items-center rounded-3xl border border-stone-200 bg-stone-50 p-4">
+                      <div className="w-24 h-24 bg-white overflow-hidden rounded-lg shadow-sm">
+                        <img
+                          src={cartItems[0].img}
+                          alt={cartItems[0].name}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                      <div>
+                        <p className="text-xs uppercase tracking-[0.35em] text-stone-500">Product</p>
+                        <p className="font-semibold text-stone-900">{cartItems[0].name}</p>
+                        <p className="text-sm text-stone-600">{cartItems[0].price}</p>
+                        <p className="text-sm text-stone-600">Qty: {cartItems[0].quantity}</p>
+                      </div>
+                    </div>
+                  )}
 
                   {errorMessage && (
                     <div className="mb-6 p-4 bg-red-50 border border-red-200 text-red-700 rounded">

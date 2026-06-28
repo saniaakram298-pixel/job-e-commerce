@@ -1,9 +1,10 @@
 'use client';
 
 import Link from 'next/link';
-import React, { useState } from 'react';
-import { usePathname } from 'next/navigation';
+import React, { useState, useRef, useEffect } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
 import { NavLink, SubItem } from '@/types';
+import { useAuthStore } from '@/hooks/useAuth';
 
 interface NavbarProps {
   scrolled: boolean;
@@ -36,7 +37,42 @@ export default function Navbar({ scrolled }: NavbarProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isCollectionOpen, setIsCollectionOpen] = useState(false);
   const [isArrivalsOpen, setIsArrivalsOpen] = useState(false);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
   const pathname = usePathname();
+  const router = useRouter();
+  const profileRef = useRef<HTMLDivElement>(null);
+  
+  const { user, logout } = useAuthStore();
+
+  // Handle outside clicks for profile dropdown
+  useEffect(() => {
+    const handleOutsideClick = (event: MouseEvent) => {
+      if (profileRef.current && !profileRef.current.contains(event.target as Node)) {
+        setIsProfileOpen(false);
+      }
+    };
+
+    if (isProfileOpen) {
+      document.addEventListener('mousedown', handleOutsideClick);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleOutsideClick);
+    };
+  }, [isProfileOpen]);
+
+  // Handle logout
+  const handleLogout = () => {
+    logout();
+    setIsProfileOpen(false);
+    router.push('/login');
+  };
+
+  // Handle admin dashboard navigation
+  const handleAdminDashboard = () => {
+    router.push('/admin/dashboard');
+    setIsProfileOpen(false);
+  };
 
   return (
     <header
@@ -94,9 +130,61 @@ export default function Navbar({ scrolled }: NavbarProps) {
           <Link href="/cart" className="hover:scale-110 transition flex items-center">
             <span className="material-symbols-outlined text-[22px]">shopping_bag</span>
           </Link>
-          <Link href="/login" className="hover:scale-110 transition flex items-center hidden md:flex">
-            <span className="material-symbols-outlined text-[22px]">person</span>
-          </Link>
+
+          {/* Profile Icon with Dropdown */}
+          <div ref={profileRef} className="relative hidden md:flex">
+            {user ? (
+              <>
+                <button
+                  onClick={() => setIsProfileOpen(!isProfileOpen)}
+                  className="hover:scale-110 transition flex items-center"
+                  aria-label="Profile menu"
+                >
+                  <span className="material-symbols-outlined text-[22px]">person</span>
+                </button>
+
+                {/* Profile Dropdown Menu */}
+                {isProfileOpen && (
+                  <div className="absolute right-0 mt-10 w-48 bg-white rounded-lg shadow-xl z-[70] overflow-hidden">
+                    {/* Dropdown Header */}
+                    <div className="px-4 py-3 border-b border-stone-200 bg-stone-50">
+                      <p className="text-sm font-semibold text-black">Admin Account</p>
+                      {user?.email && (
+                        <p className="text-xs text-stone-600 truncate">{user.email}</p>
+                      )}
+                    </div>
+
+                    {/* Dropdown Items */}
+                    <div className="py-2">
+                      <button
+                        onClick={handleAdminDashboard}
+                        className="w-full px-4 py-2 text-left text-sm text-black hover:bg-stone-100 transition-colors duration-200 flex items-center gap-2"
+                      >
+                        <span className="material-symbols-outlined text-[18px]">
+                          dashboard
+                        </span>
+                        Admin Dashboard
+                      </button>
+
+                      <button
+                        onClick={handleLogout}
+                        className="w-full px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50 transition-colors duration-200 flex items-center gap-2 border-t border-stone-200"
+                      >
+                        <span className="material-symbols-outlined text-[18px]">
+                          logout
+                        </span>
+                        Logout
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : (
+              <Link href="/login" className="hover:scale-110 transition flex items-center">
+                <span className="material-symbols-outlined text-[22px]">person</span>
+              </Link>
+            )}
+          </div>
         </div>
       </div>
 

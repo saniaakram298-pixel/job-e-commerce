@@ -38,7 +38,7 @@ export default function ProductDetailModal({
   const [selectedSize, setSelectedSize] = useState<string | null>(null);
   const [quantity, setQuantity] = useState(1);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
-  const { addToCart } = useCart();
+  const { addToCart, clearCart } = useCart();
   const router = useRouter();
 
   useEffect(() => {
@@ -61,16 +61,25 @@ export default function ProductDetailModal({
   const mainImage = displayImages[selectedImageIndex] || product.img;
 
   const handleAddToCart = () => {
+    const selectedImg = mainImage || product.img;
+
     const arrival: Arrival = {
-      id: product._id || product.id,
+      id: (product as any).productId || product._id || product.id,
       name: product.title || product.name,
-      img: product.img,
+      img: selectedImg,
       price: product.price,
-      images: displayImages,
+      images: [selectedImg],
       category: product.category,
       collectionName: product.collection,
-      _id: product._id,
+      _id: (product as any).productId || product._id,
     } as unknown as Arrival;
+
+    // Clear existing cart so only this product appears in checkout
+    try {
+      clearCart();
+    } catch (e) {
+      // ignore
+    }
 
     addToCart(arrival, quantity, selectedSize || undefined);
     onClose();

@@ -74,8 +74,9 @@ export async function POST(request: NextRequest) {
 
         // If size provided
         if (size) {
+          const normalizedSize = (size || '').trim();
           const updatedProduct = await Product.findOneAndUpdate(
-            { _id: productId, 'sizes.size': size, 'sizes.stock': { $gte: quantity } },
+            { _id: productId, 'sizes.size': new RegExp(`^${normalizedSize}$`, 'i'), 'sizes.stock': { $gte: quantity } },
             { $inc: { 'sizes.$.stock': -quantity } },
             { new: true }
           );
@@ -83,8 +84,9 @@ export async function POST(request: NextRequest) {
             return createErrorResponse(`Product "${item.name || productId}" with size "${size}" is out of stock or not found`, 400);
           }
         } else if (color) {
+          const normalizedColor = (color || '').trim();
           const updatedProduct = await Product.findOneAndUpdate(
-            { _id: productId, 'colors.color': color, 'colors.stock': { $gte: quantity } },
+            { _id: productId, 'colors.color': new RegExp(`^${normalizedColor}$`, 'i'), 'colors.stock': { $gte: quantity } },
             { $inc: { 'colors.$.stock': -quantity } },
             { new: true }
           );
