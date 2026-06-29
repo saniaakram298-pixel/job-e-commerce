@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { connectDB } from '@/lib/mongodb';
 import { Product } from '@/models/Product';
 import { createErrorResponse, createSuccessResponse } from '@/lib/response';
+import { saveUploadedFile } from '@/lib/uploadHandler';
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
@@ -78,7 +79,65 @@ export async function POST(request: NextRequest) {
   try {
     await connectDB();
 
-    const body = await request.json();
+    let body: any = {};
+    let uploadedImages: string[] = [];
+
+    // Check if this is FormData (file upload) or JSON
+    const contentType = request.headers.get('content-type');
+    
+    if (contentType?.includes('multipart/form-data')) {
+      // Handle FormData with file uploads
+      const formData = await request.formData();
+      
+      // Extract form fields
+      body = {
+        name: formData.get('name'),
+        description: formData.get('description'),
+        price: formData.get('price'),
+        discountPrice: formData.get('discountPrice'),
+        category: formData.get('category'),
+        collection: formData.get('collection'),
+        careInstructions: formData.get('careInstructions'),
+        fit: formData.get('fit'),
+        featured: formData.get('featured') === 'true',
+        active: formData.get('active') !== 'false',
+      };
+
+      // Parse JSON arrays
+      try {
+        body.materials = JSON.parse(formData.get('materials') as string || '[]');
+        body.sizes = JSON.parse(formData.get('sizes') as string || '[]');
+        body.colors = JSON.parse(formData.get('colors') as string || '[]');
+        body.tags = JSON.parse(formData.get('tags') as string || '[]');
+      } catch (e) {
+        console.error('Error parsing form arrays:', e);
+      }
+
+      // Handle file uploads
+      const files = formData.getAll('images') as File[];
+      if (files && files.length > 0) {
+        for (const file of files) {
+          if (file && file.size > 0) {
+            try {
+              const uploadResult = await saveUploadedFile(file);
+              // Extract just the URL from the upload result
+              // The result can be a string (URL) or an object with url property
+              const imageUrl = typeof uploadResult === 'string' 
+                ? uploadResult 
+                : (uploadResult as any)?.url || uploadResult;
+              uploadedImages.push(imageUrl);
+            } catch (uploadError) {
+              console.error('Error uploading file:', uploadError);
+              // Continue with other files even if one fails
+            }
+          }
+        }
+      }
+      body.images = uploadedImages;
+    } else {
+      // Handle JSON request
+      body = await request.json();
+    }
 
     // Validate required fields
     const requiredFields = ['name', 'price', 'category', 'description', 'collection'];

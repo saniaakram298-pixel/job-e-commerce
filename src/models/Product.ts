@@ -111,10 +111,15 @@ const productSchema = new Schema<IProduct>(
   { timestamps: true, suppressReservedKeysWarning: true }
 );
 
-// Create indexes for better query performance
-productSchema.index({ category: 1, createdAt: -1 });
-productSchema.index({ featured: 1, createdAt: -1 });
-productSchema.index({ active: 1, category: 1 });
+// Create compound indexes for optimal query performance
+// Note: Single field indexes are handled by field-level index: true properties
+// These compound indexes optimize common query patterns
+productSchema.index({ category: 1, createdAt: -1 }); // Category with latest products
+productSchema.index({ category: 1, active: 1 }); // Active products in category
+productSchema.index({ featured: 1, createdAt: -1 }); // Featured products sorted by date
+productSchema.index({ category: 1, price: 1 }); // Category products with price sorting
+productSchema.index({ active: 1, featured: 1, createdAt: -1 }); // Active featured products by date
+productSchema.index({ collection: 1, category: 1 }); // Collection and category combination
 
 if (mongoose.models.Product) {
   delete mongoose.models.Product;
