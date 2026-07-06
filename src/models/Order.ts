@@ -1,4 +1,4 @@
-import mongoose, { Schema, Model } from 'mongoose';
+import mongoose, { Schema, Model, Types } from 'mongoose';
 
 export interface IOrder {
   _id: mongoose.Types.ObjectId | string;
@@ -8,7 +8,7 @@ export interface IOrder {
   customerEmail?: string;
   customerPhone?: string;
   items: Array<{
-    productId: string;
+    productId: Types.ObjectId | string;
     name: string;
     quantity: number;
     price: number;
@@ -60,7 +60,11 @@ const orderSchema = new Schema<IOrder>(
     customerPhone: String,
     items: [
       {
-        productId: String,
+        productId: {
+          type: Schema.Types.ObjectId,
+          ref: 'Product',
+          required: false,
+        },
         name: String,
         quantity: Number,
         price: Number,

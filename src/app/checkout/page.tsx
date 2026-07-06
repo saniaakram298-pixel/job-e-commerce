@@ -121,43 +121,47 @@ export default function CheckoutPage() {
       return;
     }
 
-    const orderData = buildGuestOrderPayload({
+        const orderData = buildGuestOrderPayload({
       type: 'guest',
-      customerName: formData.name,
-      customerEmail: formData.email,
+      customerName: formData.name.trim(),
+      customerEmail: formData.email.trim(),
       customer: {
-        firstName: formData.name.split(' ')[0],
-        lastName: formData.name.split(' ').slice(1).join(' '),
-        email: formData.email,
+        firstName: formData.name.split(' ')[0]?.trim() || '',
+        lastName: formData.name.split(' ').slice(1).join(' ').trim(),
+        email: formData.email.trim(),
       },
-      items: cartItems.map((item) => {
-        const productId = item.id || (item as any)._id;
-        const quantity = Number(item.quantity) || 1;
-        const price = parseFloat(String(item.price).replace(/[^0-9.-]+/g, '')) || 0;
+      items: cartItems
+        .map((item) => {
+          const cartItem = item as CartItem & { productId?: string; _id?: string; color?: string };
+          const productId = String(cartItem.productId || cartItem.id || cartItem._id || '').trim();
+          const quantity = Math.max(1, Number(cartItem.quantity) || 0);
+          const price = Number(String(cartItem.price).replace(/[^0-9.-]+/g, '')) || 0;
 
-        return {
-          productId,
-          name: item.name,
-          quantity,
-          price,
-          ...(item.size && { size: item.size }),
-        };
-      }),
+          return {
+            productId,
+            name: cartItem.name,
+            quantity,
+            price,
+            ...(cartItem.size ? { size: cartItem.size } : {}),
+            ...(cartItem.color ? { color: cartItem.color } : {}),
+          };
+        })
+        .filter((item) => item.productId && item.quantity > 0),
       shippingAddress: {
-        street: formData.address,
-        city: formData.city,
-        state: formData.state,
-        zipCode: formData.zipCode,
-        country: formData.country,
+        street: formData.address.trim(),
+        city: formData.city.trim(),
+        state: formData.state.trim(),
+        zipCode: formData.zipCode.trim(),
+        country: formData.country.trim(),
       },
       billingAddress: {
-        street: formData.address,
-        city: formData.city,
-        state: formData.state,
-        zipCode: formData.zipCode,
-        country: formData.country,
+        street: formData.address.trim(),
+        city: formData.city.trim(),
+        state: formData.state.trim(),
+        zipCode: formData.zipCode.trim(),
+        country: formData.country.trim(),
       },
-      paymentMethod: formData.paymentMethod,
+      paymentMethod: formData.paymentMethod?.trim() || 'cash-on-delivery',
       totalPrice: calculateTotal(),
     });
 

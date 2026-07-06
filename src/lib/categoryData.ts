@@ -28,6 +28,7 @@ export interface CategoryWithProducts {
   name: string;
   products: CategoryProduct[];
   total: number;
+  image?: string;
 }
 
 // Define all available categories

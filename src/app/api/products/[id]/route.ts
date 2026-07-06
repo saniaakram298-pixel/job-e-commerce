@@ -29,6 +29,44 @@ export async function GET(
         return createErrorResponse('Internal server error', 500);
     }
 }
+export async function PUT(
+    request: NextRequest,
+    { params }: { params: Promise<{ id: string }> }
+) {
+    try {
+        await connectDB();
+        const { id } = await params;
+        const body = await request.json();
+
+        if (!mongoose.Types.ObjectId.isValid(id)) {
+            return createErrorResponse('Invalid product ID', 400);
+        }
+
+        // Product update karein
+        const updatedProduct = await Product.findByIdAndUpdate(
+            id,
+            { $set: body }, // Sirf wahi fields update hongi jo body mein aayengi
+            { new: true, runValidators: true }
+        );
+
+        if (!updatedProduct) {
+            return createErrorResponse('Product not found', 404);
+        }
+
+        // Revalidate cache agar zaroori ho
+        try {
+            revalidatePath('/');
+            revalidatePath('/products');
+        } catch (e) {
+            // non-fatal
+        }
+
+        return createSuccessResponse(updatedProduct, 'Product updated successfully');
+    } catch (error) {
+        console.error('Update product error:', error);
+        return createErrorResponse('Failed to update product', 500);
+    }
+}
 
 export async function DELETE(
     request: NextRequest,

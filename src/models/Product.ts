@@ -1,17 +1,6 @@
 import mongoose, { Schema, Model } from 'mongoose';
 
-export type ProductCategory = 
-  | 'bridal' 
-  | 'groom' 
-  | 'formal' 
-  | 'informal' 
-  | 'children' 
-  | 'men' 
-  | 'women' 
-  | 'old-people' 
-  | 'young' 
-  | 'new-arrival'
-  | 'accessories';
+export type ProductCategory = string;
 
 export interface IProduct {
   _id: mongoose.Types.ObjectId | string;
@@ -38,6 +27,8 @@ export interface IProduct {
   careInstructions?: string;
   fit?: string;
   featured: boolean;
+  isBestSeller: boolean;
+  isTrending: boolean;
   active: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -69,7 +60,6 @@ const productSchema = new Schema<IProduct>(
     },
     category: {
       type: String,
-      enum: ['bridal', 'groom', 'formal', 'informal', 'children', 'men', 'women', 'old-people', 'young', 'new-arrival', 'accessories'],
       required: true,
       index: true,
     },
@@ -102,6 +92,16 @@ const productSchema = new Schema<IProduct>(
       type: Boolean,
       index: true,
     },
+    isBestSeller: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    isTrending: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
     active: {
       type: Boolean,
       default: true,
@@ -117,6 +117,8 @@ const productSchema = new Schema<IProduct>(
 productSchema.index({ category: 1, createdAt: -1 }); // Category with latest products
 productSchema.index({ category: 1, active: 1 }); // Active products in category
 productSchema.index({ featured: 1, createdAt: -1 }); // Featured products sorted by date
+productSchema.index({ isBestSeller: 1, active: 1, createdAt: -1 }); // Best seller products by date
+productSchema.index({ isTrending: 1, active: 1, createdAt: -1 }); // Trending products by date
 productSchema.index({ category: 1, price: 1 }); // Category products with price sorting
 productSchema.index({ active: 1, featured: 1, createdAt: -1 }); // Active featured products by date
 productSchema.index({ collection: 1, category: 1 }); // Collection and category combination

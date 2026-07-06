@@ -20,9 +20,45 @@ const statusLabels: Record<string, { label: string; badge: string }> = {
   cancelled: { label: 'Cancelled', badge: 'bg-red-100 text-red-700' },
 };
 
+function isValidImageUrl(value?: string | null) {
+  if (!value) return false;
+  const s = value.trim();
+  if (!s) return false;
+  return s.startsWith('http://') || s.startsWith('https://') || s.startsWith('data:') || s.startsWith('/');
+}
+
+function normalizeImageSrc(value?: string | null) {
+  if (!value) return '/images/hero.png';
+
+  const trimmed = value.trim();
+  if (!trimmed) return '/images/hero.png';
+
+  if (isValidImageUrl(trimmed)) return trimmed;
+
+  return `/${trimmed.replace(/^\/+/, '')}`;
+}
+
+function getProductImageSrc(productId: Order['items'][number]['productId']) {
+  if (typeof productId === 'object' && productId) {
+    const candidate = (productId as { img?: string; images?: string[] }).img || (productId as { images?: string[] }).images?.[0];
+    return normalizeImageSrc(candidate);
+  }
+
+  if (typeof productId === 'string' && isValidImageUrl(productId)) {
+    return normalizeImageSrc(productId);
+  }
+
+  return '/images/hero.png';
+}
+
 export const Orders: React.FC = () => {
   const router = useRouter();
   const queryClient = useQueryClient();
+
+  // Edit modal state
+  const [editingOrder, setEditingOrder] = useState<Order | null>(null);
+  const [editDraft, setEditDraft] = useState<any>(null);
+  const [isEditOpen, setIsEditOpen] = useState(false);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled'>('all');
@@ -101,6 +137,52 @@ export const Orders: React.FC = () => {
     }
   }
 
+  async function handleDeleteOrder(orderId: string) {
+    if (!confirm('Delete this order? This action cannot be undone.')) return;
+    try {
+      await api.delete(`/orders/${orderId}`, true);
+      queryClient.invalidateQueries({ queryKey: ['admin-orders'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-pending-orders'] });
+    } catch (err) {
+      console.error('Failed to delete order', err);
+      alert('Failed to delete order');
+    }
+  }
+
+  function openEditModal(order: Order) {
+    setEditingOrder(order);
+    setEditDraft({
+      orderStatus: order.orderStatus,
+      items: (order.items || []).map((it) => ({ size: it.size || '', color: it.color || '', productId: it.productId })),
+    });
+    setIsEditOpen(true);
+  }
+
+  function closeEditModal() {
+    setIsEditOpen(false);
+    setEditingOrder(null);
+    setEditDraft(null);
+  }
+
+  async function saveEdit() {
+    if (!editingOrder || !editDraft) return;
+    try {
+      const payload: any = { orderStatus: editDraft.orderStatus, items: [] };
+      for (let i = 0; i < (editDraft.items || []).length; i++) {
+        const it = editDraft.items[i];
+        payload.items.push({ index: i, size: it.size || undefined, color: it.color || undefined });
+      }
+
+      await api.patch(`/orders/${editingOrder._id}`, payload, true);
+      queryClient.invalidateQueries({ queryKey: ['admin-orders'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-pending-orders'] });
+      closeEditModal();
+    } catch (err) {
+      console.error('Failed to save order edits', err);
+      alert('Failed to save order changes');
+    }
+  }
+
   function toggleSelectAll(checked: boolean, visibleList: Order[]) {
     const next: Record<string, boolean> = { ...selectedIds };
     visibleList.forEach((o) => (next[o._id] = checked));
@@ -158,6 +240,7 @@ export const Orders: React.FC = () => {
   }, [pendingOrders]);
 
   return (
+    <>
     <main className="space-y-6 p-6">
       {/* Hero stats */}
       <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-6">
@@ -270,7 +353,7 @@ export const Orders: React.FC = () => {
               ) : (
                 <div className="overflow-hidden rounded-3xl border border-neutral-200">
                   <div className="overflow-x-auto">
-                    <table className="min-w-[900px] w-full text-left text-sm">
+                    <table className="min-w-[1040px] w-full text-left text-sm">
                       <thead className="bg-slate-50">
                         <tr>
                           <th className="px-6 py-4 uppercase tracking-widest text-xs text-slate-500">
@@ -282,6 +365,9 @@ export const Orders: React.FC = () => {
                             />
                           </th>
                           <th className="px-6 py-4 uppercase tracking-widest text-xs text-slate-500">Order</th>
+                          <th className="px-6 py-4 uppercase tracking-widest text-xs text-slate-500">Image</th>
+                          <th className="px-6 py-4 uppercase tracking-widest text-xs text-slate-500">Size</th>
+                          <th className="px-6 py-4 uppercase tracking-widest text-xs text-slate-500">Color</th>
                           <th className="px-6 py-4 uppercase tracking-widest text-xs text-slate-500">Customer</th>
                           <th className="px-6 py-4 uppercase tracking-widest text-xs text-slate-500">Email</th>
                           <th className="px-6 py-4 uppercase tracking-widest text-xs text-slate-500">Status</th>
@@ -294,7 +380,7 @@ export const Orders: React.FC = () => {
                       <tbody className="bg-white">
                         {filteredOrders.length === 0 ? (
                           <tr>
-                            <td colSpan={9} className="px-6 py-8 text-center text-sm text-slate-500">
+                            <td colSpan={10} className="px-6 py-8 text-center text-sm text-slate-500">
                               No orders match your search or filter.
                             </td>
                           </tr>
@@ -311,6 +397,71 @@ export const Orders: React.FC = () => {
                                   />
                                 </td>
                                 <td className="px-6 py-4 font-semibold text-slate-900">#{order.orderNumber}</td>
+                                <td className="px-6 py-4">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    {order.items?.length ? (
+                                      order.items.map((item, index) => {
+                                        const imageSrc = getProductImageSrc(item.productId);
+                                        return (
+                                          <div
+                                            key={`${order._id}-${index}`}
+                                            className="flex h-10 w-10 items-center justify-center overflow-hidden rounded-xl border border-slate-200 bg-slate-50"
+                                          >
+                                            <img
+                                              src={imageSrc}
+                                              alt={item.name || `Product ${index + 1}`}
+                                              className="h-full w-full object-cover"
+                                              loading="lazy"
+                                              onError={(event) => {
+                                                const target = event.currentTarget as HTMLImageElement;
+                                                target.src = '/images/hero.png';
+                                              }}
+                                            />
+                                          </div>
+                                        );
+                                      })
+                                    ) : (
+                                      <span className="text-xs text-slate-400">No image</span>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    {order.items?.length ? (
+                                      order.items.map((item, index) => (
+                                        <span key={`${order._id}-size-${index}`} className="inline-flex items-center rounded-full bg-slate-100 px-2 py-1 text-xs text-slate-700">
+                                          {item.size || '—'}
+                                        </span>
+                                      ))
+                                    ) : (
+                                      <span className="text-xs text-slate-400">—</span>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="px-6 py-4">
+                                  <div className="flex flex-wrap items-center gap-2">
+                                    {order.items?.length ? (
+                                      order.items.map((item, index) => (
+                                        <div key={`${order._id}-color-${index}`} className="flex items-center gap-2">
+                                          {item.color ? (
+                                            <span className="flex items-center gap-2">
+                                              <span
+                                                aria-hidden
+                                                style={{ backgroundColor: item.color }}
+                                                className="inline-block h-3 w-3 rounded-full border border-slate-200"
+                                              />
+                                              <span className="text-xs text-slate-700">{item.color}</span>
+                                            </span>
+                                          ) : (
+                                            <span className="text-xs text-slate-400">—</span>
+                                          )}
+                                        </div>
+                                      ))
+                                    ) : (
+                                      <span className="text-xs text-slate-400">—</span>
+                                    )}
+                                  </div>
+                                </td>
                                 <td className="px-6 py-4 text-slate-600">{order.customerName || 'Guest'}</td>
                                 <td className="px-6 py-4 text-slate-600">{order.customerEmail || '—'}</td>
                                 <td className="px-6 py-4">
@@ -331,6 +482,22 @@ export const Orders: React.FC = () => {
                                 <td className="px-6 py-4 text-slate-600">{formatDate(order.createdAt)}</td>
                                 <td className="px-6 py-4">
                                   <div className="flex items-center gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => openEditModal(order)}
+                                      className="rounded-2xl border border-slate-200 bg-white px-3 py-1 text-sm text-slate-700"
+                                    >
+                                      Edit
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeleteOrder(order._id)}
+                                      className="rounded-2xl border border-red-200 bg-red-50 px-3 py-1 text-sm text-red-700"
+                                    >
+                                      Delete
+                                    </button>
+
                                     <button
                                       type="button"
                                       onClick={() => router.push(`/admin/orders/${order._id}`)}
@@ -389,6 +556,65 @@ export const Orders: React.FC = () => {
           )}
         </div>
       </div>
+      {isEditOpen && editingOrder && editDraft && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/40" onClick={closeEditModal} />
+          <div className="relative z-10 w-full max-w-2xl rounded-lg bg-white p-6">
+            <h3 className="text-lg font-semibold">Edit Order #{editingOrder.orderNumber}</h3>
+            <div className="mt-4 space-y-4">
+              <label className="block text-sm">Status</label>
+              <select
+                value={editDraft.orderStatus}
+                onChange={(e) => setEditDraft((d: any) => ({ ...d, orderStatus: e.target.value }))}
+                className="input-base"
+              >
+                <option value="pending">Pending</option>
+                <option value="processing">Processing</option>
+                <option value="shipped">Shipped</option>
+                <option value="delivered">Delivered</option>
+                <option value="cancelled">Cancelled</option>
+              </select>
+
+              <div>
+                <div className="text-sm font-medium">Items</div>
+                <div className="mt-2 space-y-2">
+                  {editDraft.items.map((it: any, idx: number) => (
+                    <div key={idx} className="flex items-center gap-3">
+                      <div className="flex-1 text-sm">Item {idx + 1}</div>
+                      <input
+                        placeholder="Size"
+                        value={it.size}
+                        onChange={(e) => {
+                          const next = { ...editDraft };
+                          next.items[idx].size = e.target.value;
+                          setEditDraft(next);
+                        }}
+                        className="input-base w-32"
+                      />
+                      <input
+                        placeholder="Color"
+                        value={it.color}
+                        onChange={(e) => {
+                          const next = { ...editDraft };
+                          next.items[idx].color = e.target.value;
+                          setEditDraft(next);
+                        }}
+                        className="input-base w-32"
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="mt-4 flex justify-end gap-2">
+                <button type="button" onClick={closeEditModal} className="rounded-2xl px-4 py-2">Cancel</button>
+                <button type="button" onClick={saveEdit} className="rounded-2xl bg-slate-800 px-4 py-2 text-white">Save</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
+    </>
   );
 };

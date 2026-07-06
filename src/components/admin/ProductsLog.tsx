@@ -22,9 +22,10 @@ interface Product {
 interface ProductsLogProps {
   darkMode?: boolean;
   onRefresh?: () => void;
+  categoryFilter?: string;
 }
 
-export const ProductsLog: React.FC<ProductsLogProps> = ({ darkMode = false, onRefresh }) => {
+export const ProductsLog: React.FC<ProductsLogProps> = ({ darkMode = false, onRefresh, categoryFilter }) => {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -77,6 +78,12 @@ export const ProductsLog: React.FC<ProductsLogProps> = ({ darkMode = false, onRe
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (categoryFilter && categoryFilter.trim() && categoryFilter !== 'all') {
+      setSelectedCategory(categoryFilter);
+    }
+  }, [categoryFilter]);
 
   useEffect(() => {
     loadProducts();

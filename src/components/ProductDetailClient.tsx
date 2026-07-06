@@ -5,9 +5,12 @@ import Link from 'next/link';
 import { Product, Arrival } from '@/types';
 import { useCart } from '@/context/CartContext';
 import { buildGuestOrderPayload } from '@/lib/orderPayloads';
+import { toastManager } from '@/lib/toast';
 
 interface ProductDetailClientProps {
-  product: Product;
+  product: Partial<Product> | null;
+  isOpen?: boolean;
+  onClose?: () => void;
 }
 
 function normalizeSizes(sizes: unknown) {
@@ -38,19 +41,20 @@ function normalizeImages(images: unknown, fallback?: unknown) {
   return typeof fallback === 'string' && fallback ? [fallback] : [];
 }
 
-export default function ProductDetailClient({ product }: ProductDetailClientProps) {
+export default function ProductDetailClient({ product, isOpen, onClose }: ProductDetailClientProps) {
   const { addToCart } = useCart();
 
   const safeProduct = {
-    name: product.name || 'Product',
-    description: product.description || '',
-    price: typeof product.price === 'number' ? product.price : Number(product.price) || 0,
-    images: normalizeImages(product.images, product.img),
-    sizes: normalizeSizes(product.sizes),
-    colors: normalizeColors(product.colors),
-    collection: product.collection || '',
-    category: product.category || '',
-    careInstructions: product.careInstructions || '',
+    _id: String(product?._id || ''),
+    name: String(product?.name || 'Product'),
+    description: String(product?.description || ''),
+    price: typeof product?.price === 'number' ? product.price : Number(product?.price) || 0,
+    images: normalizeImages(product?.images, product?.img),
+    sizes: normalizeSizes(product?.sizes),
+    colors: normalizeColors(product?.colors),
+    collection: String(product?.collection || ''),
+    category: String(product?.category || ''),
+    careInstructions: String(product?.careInstructions || ''),
   };
 
   const [selectedSize, setSelectedSize] = useState<string>(
@@ -74,6 +78,10 @@ export default function ProductDetailClient({ product }: ProductDetailClientProp
   const [orderMessage, setOrderMessage] = useState('');
   const [orderSuccess, setOrderSuccess] = useState('');
 
+  if (!product) {
+    return null;
+  }
+
   const toggleDrawer = (open: boolean) => {
     setDrawerOpen(open);
     if (!open) {
@@ -84,8 +92,8 @@ export default function ProductDetailClient({ product }: ProductDetailClientProp
 
   const orderItems = [
     {
-      productId: product._id || '',
-      name: product.name,
+      productId: safeProduct._id,
+      name: safeProduct.name,
       quantity: 1,
       price: safeProduct.price,
       size: selectedSize || undefined,
@@ -118,6 +126,7 @@ export default function ProductDetailClient({ product }: ProductDetailClientProp
 
     try {
       const payload = buildGuestOrderPayload({
+        type: 'guest',
         customerName,
         customerEmail,
         customerPhone,
@@ -135,8 +144,11 @@ export default function ProductDetailClient({ product }: ProductDetailClientProp
           zipCode,
           country,
         },
-        paymentMethod: 'Cash on Delivery',
-        items: orderItems,
+        paymentMethod: 'cash-on-delivery',
+        items: orderItems.map((item) => ({
+          ...item,
+          productId: String(item.productId || ''),
+        })),
         totalPrice: orderItems.reduce((sum, item) => sum + item.price * item.quantity, 0),
       });
 
@@ -168,6 +180,7 @@ export default function ProductDetailClient({ product }: ProductDetailClientProp
   const canAddToCart = !hasSizeOptions || selectedSizeStock > 0;
   const mainImage =
     safeProduct.images[selectedImageIndex] || safeProduct.images[0] || '';
+  const hasGallery = safeProduct.images.length > 1;
 
   return (
     <div className="min-h-screen bg-[#fcf9f8] text-[#1c1b1b]">
@@ -182,7 +195,7 @@ export default function ProductDetailClient({ product }: ProductDetailClientProp
       <main className="max-w-[1400px] mx-auto px-8 py-16 grid grid-cols-1 lg:grid-cols-2 gap-20">
         <div className="flex flex-col gap-6">
           <div className="flex gap-6 items-start">
-            <div className="grid gap-4 w-28">
+            <div className="flex flex-col gap-3 w-28">
               {safeProduct.images?.map((image, index) => (
                 <button
                   key={image + index}
@@ -201,7 +214,7 @@ export default function ProductDetailClient({ product }: ProductDetailClientProp
               {mainImage ? (
                 <img
                   src={mainImage}
-                  alt={`${product.name} product image`}
+                  alt={`${safeProduct.name} product image`}
                   className="object-cover w-full h-full"
                 />
               ) : (
@@ -212,16 +225,16 @@ export default function ProductDetailClient({ product }: ProductDetailClientProp
 
           <div className="bg-white p-8 border border-stone-100 italic shadow-sm">
             <p className="text-[9px] font-bold uppercase tracking-widest text-stone-400 mb-2">Atelier Privilege</p>
-            <p className="text-sm font-serif leading-relaxed">{product.careInstructions || product.description}</p>
+            <p className="text-sm font-serif leading-relaxed">{safeProduct.description || safeProduct.careInstructions}</p>
           </div>
         </div>
 
         <div className="space-y-12">
           <div className="space-y-4">
-            <p className="text-[10px] font-bold tracking-[0.5em] text-stone-400 uppercase">{product.collection || product.category}</p>
-            <h1 className="text-6xl font-serif italic tracking-tighter leading-none">{product.name}</h1>
+            <p className="text-[10px] font-bold tracking-[0.5em] text-stone-400 uppercase">{safeProduct.collection || safeProduct.category}</p>
+            <h1 className="text-6xl font-serif italic tracking-tighter leading-none">{safeProduct.name}</h1>
             <div className="flex items-center gap-6">
-              <p className="text-3xl font-bold tracking-tighter">${product.price.toLocaleString()}</p>
+              <p className="text-3xl font-bold tracking-tighter">${safeProduct.price.toLocaleString()}</p>
               {selectedSizeStock > 0 ? (
                 <span className="text-[9px] font-bold bg-green-50 text-green-700 px-3 py-1 rounded-full uppercase tracking-widest">In Stock</span>
               ) : (
@@ -277,35 +290,38 @@ export default function ProductDetailClient({ product }: ProductDetailClientProp
           </div>
 
           <div className="pt-4 space-y-4">
-                <button
-                  type="button"
-                  disabled={!canAddToCart}
-                  onClick={() => {
-                    if (!canAddToCart) return;
+            <button
+              type="button"
+              disabled={!canAddToCart}
+              onClick={() => {
+                if (!canAddToCart) return;
 
-                    const cartItem: Arrival = {
-                      id: product._id || '',
-                      name: product.name,
-                      img: safeProduct.images[0] || product.img || '',
-                      price: String(safeProduct.price),
-                      cat: product.category || product.collection || '',
-                      category: product.category || product.collection || '',
-                      images: safeProduct.images,
-                    };
+                const cartItem: Arrival = {
+                  id: safeProduct._id,
+                  name: safeProduct.name,
+                  img: safeProduct.images[0] || product?.img || '',
+                  price: String(safeProduct.price),
+                  cat: safeProduct.category || safeProduct.collection,
+                  category: safeProduct.category || safeProduct.collection,
+                  images: safeProduct.images,
+                };
 
-                    addToCart(cartItem, 1, hasSizeOptions ? selectedSize : undefined);
-                    setDrawerOpen(true);
-                  }}
-                  className={`w-full py-7 rounded-none border border-black bg-black text-white text-base uppercase tracking-[0.2em] transition hover:bg-stone-900 disabled:bg-stone-200 disabled:text-stone-400 disabled:border-stone-200`}
-                >
-                  {canAddToCart ? 'Add to Bag' : 'Sold Out'}
-                </button>
-              </div>
+                addToCart(cartItem, 1, hasSizeOptions ? selectedSize : undefined);
+                toastManager.success('Added to cart');
+                handleProceed();
+                setDrawerOpen(true);
+              }}
+              className={`w-full py-7 rounded-none border border-black bg-black text-white text-base uppercase tracking-[0.2em] transition hover:bg-stone-900 disabled:bg-stone-200 disabled:text-stone-400 disabled:border-stone-200`}
+            >
+              {canAddToCart ? 'Add to Cart' : 'Sold Out'}
+            </button>
+          </div>
+
           <div className="pt-12 border-t border-stone-200 space-y-8">
             <div>
               <p className="text-[10px] font-bold uppercase mb-4 tracking-[0.3em]">The Craftsmanship</p>
               <p className="text-sm text-stone-600 leading-relaxed font-light italic">
-                {product.description}
+                {safeProduct.description}
               </p>
             </div>
           </div>
@@ -330,14 +346,14 @@ export default function ProductDetailClient({ product }: ProductDetailClientProp
               <div className="flex gap-4 items-center">
                 <div className="w-24 h-24 bg-stone-100 rounded-sm overflow-hidden">
                   <img
-                    src={safeProduct.images[0] || product.img || '/api/placeholder/100/100'}
-                    alt={`${product.name} thumbnail`}
+                    src={safeProduct.images[0] || product?.img || '/api/placeholder/100/100'}
+                    alt={`${safeProduct.name} thumbnail`}
                     className="w-full h-full object-cover"
                   />
                 </div>
                 <div>
                   <p className="text-sm text-stone-500 uppercase tracking-[0.3em]">Added to Cart</p>
-                  <h2 className="text-2xl font-serif italic tracking-tighter">{product.name}</h2>
+                  <h2 className="text-2xl font-serif italic tracking-tighter">{safeProduct.name}</h2>
                   <p className="text-lg font-bold mt-2">${safeProduct.price.toLocaleString()}</p>
                 </div>
               </div>
@@ -379,12 +395,6 @@ export default function ProductDetailClient({ product }: ProductDetailClientProp
                         placeholder="Phone"
                         className="w-full border border-stone-200 px-4 py-3 outline-none focus:border-black"
                       />
-                    </div>
-                  </div>
-
-                  <div>
-                    <p className="text-[10px] font-bold uppercase tracking-[0.4em] text-stone-400">Shipping Address</p>
-                    <div className="mt-4 space-y-4">
                       <input
                         type="text"
                         value={street}
@@ -392,60 +402,49 @@ export default function ProductDetailClient({ product }: ProductDetailClientProp
                         placeholder="Street"
                         className="w-full border border-stone-200 px-4 py-3 outline-none focus:border-black"
                       />
-                      <div className="grid grid-cols-2 gap-4">
-                        <input
-                          type="text"
-                          value={city}
-                          onChange={(e) => setCity(e.target.value)}
-                          placeholder="City"
-                          className="w-full border border-stone-200 px-4 py-3 outline-none focus:border-black"
-                        />
-                        <input
-                          type="text"
-                          value={stateName}
-                          onChange={(e) => setStateName(e.target.value)}
-                          placeholder="State"
-                          className="w-full border border-stone-200 px-4 py-3 outline-none focus:border-black"
-                        />
-                      </div>
-                      <div className="grid grid-cols-2 gap-4">
-                        <input
-                          type="text"
-                          value={zipCode}
-                          onChange={(e) => setZipCode(e.target.value)}
-                          placeholder="Zip Code"
-                          className="w-full border border-stone-200 px-4 py-3 outline-none focus:border-black"
-                        />
-                        <input
-                          type="text"
-                          value={country}
-                          onChange={(e) => setCountry(e.target.value)}
-                          placeholder="Country"
-                          className="w-full border border-stone-200 px-4 py-3 outline-none focus:border-black"
-                        />
-                      </div>
+                      <input
+                        type="text"
+                        value={city}
+                        onChange={(e) => setCity(e.target.value)}
+                        placeholder="City"
+                        className="w-full border border-stone-200 px-4 py-3 outline-none focus:border-black"
+                      />
+                      <input
+                        type="text"
+                        value={stateName}
+                        onChange={(e) => setStateName(e.target.value)}
+                        placeholder="State"
+                        className="w-full border border-stone-200 px-4 py-3 outline-none focus:border-black"
+                      />
+                      <input
+                        type="text"
+                        value={zipCode}
+                        onChange={(e) => setZipCode(e.target.value)}
+                        placeholder="ZIP Code"
+                        className="w-full border border-stone-200 px-4 py-3 outline-none focus:border-black"
+                      />
+                      <input
+                        type="text"
+                        value={country}
+                        onChange={(e) => setCountry(e.target.value)}
+                        placeholder="Country"
+                        className="w-full border border-stone-200 px-4 py-3 outline-none focus:border-black"
+                      />
                     </div>
                   </div>
 
-                  <div className="rounded-lg border border-stone-200 bg-stone-50 p-4">
-                    <p className="text-[10px] uppercase tracking-[0.35em] text-stone-500 mb-2">Payment Method</p>
-                    <div className="flex items-center gap-3">
-                      <span className="inline-flex items-center justify-center rounded-full bg-stone-900 text-white px-3 py-2 text-[11px] uppercase tracking-[0.2em]">Cash on Delivery</span>
-                      <span className="text-sm text-stone-500">Pay when your order arrives.</span>
-                    </div>
+                  <div className="space-y-3">
+                    {orderMessage && <p className="text-sm text-red-600">{orderMessage}</p>}
+                    {orderSuccess && <p className="text-sm text-green-600">{orderSuccess}</p>}
+                    <button
+                      type="button"
+                      onClick={handleSubmitOrder}
+                      disabled={isSubmittingOrder}
+                      className="w-full px-6 py-4 border border-black bg-black text-white uppercase tracking-[0.2em] disabled:bg-stone-400"
+                    >
+                      {isSubmittingOrder ? 'Placing Order...' : 'Submit Order'}
+                    </button>
                   </div>
-
-                  {orderMessage && <p className="text-sm text-red-600">{orderMessage}</p>}
-                  {orderSuccess && <p className="text-sm text-green-700">{orderSuccess}</p>}
-
-                  <button
-                    type="button"
-                    disabled={isSubmittingOrder}
-                    onClick={handleSubmitOrder}
-                    className="w-full px-6 py-4 border border-black bg-black text-white uppercase tracking-[0.2em] disabled:opacity-60"
-                  >
-                    {isSubmittingOrder ? 'Saving Order...' : 'Done'}
-                  </button>
                 </div>
               )}
             </div>

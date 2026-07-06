@@ -1,6 +1,7 @@
 "use client";
 
 import React from 'react';
+import Link from 'next/link';
 import {
   LayoutGrid, Package, Layers, Truck, LogOut, MessageSquare, Activity, 
   ChevronDown, TagIcon
@@ -10,13 +11,14 @@ interface AdminSidebarProps {
   activeTab: string;
   onTabChange: (tab: string) => void;
   onCategorySelect?: (category: string) => void;
+  categories?: Array<{ id: string; label: string }>;
   isSidebarOpen: boolean;
   onClose: () => void;
   darkMode: boolean;
   onLogout: () => void;
 }
 
-const CATEGORIES = [
+const DEFAULT_CATEGORIES = [
   { id: 'bridal', label: 'Bridal' },
   { id: 'groom', label: 'Groom' },
   { id: 'formal', label: 'Formal' },
@@ -34,6 +36,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
   activeTab,
   onTabChange,
   onCategorySelect,
+  categories,
   isSidebarOpen,
   onClose,
   darkMode,
@@ -43,7 +46,6 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
 
   const mainMenuItems = [
     { id: 'overview', label: 'Overview', icon: <LayoutGrid className="w-4 h-4" /> },
-    { id: 'home', label: 'Products', icon: <Layers className="w-4 h-4" /> },
     { id: 'products', label: 'Products Log', icon: <Package className="w-4 h-4" /> },
     { id: 'orders', label: 'Orders', icon: <Truck className="w-4 h-4" /> },
     { id: 'inventory', label: 'Inventory', icon: <Package className="w-4 h-4" /> },
@@ -52,10 +54,11 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
   ];
 
   const handleCategoryClick = (categoryId: string) => {
+    // Trigger category view in the dashboard
+    onTabChange('category');
     if (onCategorySelect) {
       onCategorySelect(categoryId);
     }
-    onTabChange('home');
   };
 
   return (
@@ -104,7 +107,23 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
         </nav>
 
         {/* Categories Section */}
-        <div className="border-t border-neutral-200 dark:border-neutral-800 pt-4">
+        <div className="border-t border-neutral-200 dark:border-neutral-800 pt-4 space-y-2">
+          {/* AnalyticDashboard Button */}
+          <button
+            onClick={() => onTabChange('home')}
+            className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all ${
+              activeTab === 'home'
+                ? darkMode
+                  ? 'bg-[#141414] text-[#E5A93A] border border-neutral-800'
+                  : 'bg-[#E5A93A]/10 text-[#8C6219] border border-[#E5A93A]/20'
+                : 'text-neutral-500 hover:text-[#E5A93A]'
+            }`}
+          >
+            <Layers className="w-4 h-4" />
+            <span className="text-sm font-medium">AnalyticDashboard</span>
+          </button>
+
+          {/* Categories Button */}
           <button
             onClick={() => setExpandCategories(!expandCategories)}
             className={`w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-lg transition-all ${
@@ -127,10 +146,13 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
           {/* Category List */}
           {expandCategories && (
             <div className="mt-2 space-y-1 pl-2">
-              {CATEGORIES.map((category) => (
+              {(categories && categories.length > 0 ? categories : DEFAULT_CATEGORIES).map((category) => (
                 <button
                   key={category.id}
-                  onClick={() => handleCategoryClick(category.id)}
+                  onClick={() => {
+                    handleCategoryClick(category.id);
+                    onClose();
+                  }}
                   className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all text-left ${
                     darkMode
                       ? 'text-neutral-400 hover:text-[#E5A93A] hover:bg-neutral-800/50'

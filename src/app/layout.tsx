@@ -3,6 +3,7 @@ import '@/styles/globals.css';
 import { CartProvider } from '@/context/CartContext'; // Import context
 import GlobalSanitizer from '@/components/GlobalSanitizer';
 import ReactQueryProvider from '@/components/ReactQueryProvider';
+import { ToastContainer } from '@/components/ToastContainer';
 
 export const metadata = {
   title: 'The Atelier - Luxury Fashion E-commerce',
@@ -27,6 +28,9 @@ export default function RootLayout({
         />
       </head>
       <body className="bg-background text-on-surface selection:bg-primary-fixed selection:text-on-primary-fixed">
+        {/* Toast Container for notifications */}
+        <ToastContainer />
+        
         {/* CartProvider ko yahan wrap kar diya hai */}
         <CartProvider>
           <ReactQueryProvider>

@@ -4,10 +4,13 @@ import { global } from 'styled-jsx/css';
 
 const uri = process.env.MONGODB_URI as string;
 const options: MongoClientOptions = {
-    // Fail fast if Atlas is unreachable
-    serverSelectionTimeoutMS: 5000,
-    connectTimeoutMS: 10000,
-    // Prefer IPv4 in some environments
+    serverSelectionTimeoutMS: 30000, // Increased from 5000 to 30 seconds
+    connectTimeoutMS: 20000, // Increased from 10000 to 20 seconds
+    socketTimeoutMS: 45000, // Added socket timeout
+    maxPoolSize: 10,
+    minPoolSize: 2,
+    retryWrites: true,
+    retryReads: true,
     family: 4,
 };
 

@@ -28,11 +28,28 @@ export async function GET(request: NextRequest) {
       return createErrorResponse('User not found', 401);
     }
 
-    let orders;
-    if (requestingUser.role === 'admin') {
-      orders = await Order.find({}).sort({ createdAt: -1 }).populate({ path: 'items.productId', select: 'name images img' });
-    } else {
-      orders = await Order.find({ userId }).sort({ createdAt: -1 }).populate({ path: 'items.productId', select: 'name images img' });
+    const query: Record<string, unknown> = {};
+    if (requestingUser.role !== 'admin') {
+      query.userId = userId;
+    }
+
+    const orders = await Order.find(query)
+      .sort({ createdAt: -1 })
+      .populate({ path: 'items.productId', select: 'name images img' })
+      .lean();
+
+    for (const order of orders as Array<Record<string, any>>) {
+      for (const item of order.items || []) {
+        const productRef = item.productId;
+        const hasProductDetails = productRef && typeof productRef === 'object' && ('img' in productRef || 'images' in productRef);
+
+        if (!hasProductDetails && productRef) {
+          const product = await Product.findById(productRef).select('name images img').lean();
+          if (product) {
+            item.productId = product;
+          }
+        }
+      }
     }
 
     return createSuccessResponse(orders, 'Orders fetched successfully');

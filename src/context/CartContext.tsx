@@ -1,116 +1,128 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Arrival } from '@/types';
 
 interface CartItem extends Arrival {
-    quantity: number;
-    size?: string;
+  quantity: number;
+  size?: string;
 }
 
 interface CartContextType {
-    cart: CartItem[];
-    addToCart: (product: Arrival, quantity?: number, size?: string) => void;
-    updateQuantity: (id: string | number, quantity: number, size?: string) => void;
-    removeFromCart: (id: string | number, size?: string) => void;
-    clearCart: () => void;
-    cartCount: number;
+  cart: CartItem[];
+  addToCart: (product: Arrival, quantity?: number, size?: string) => void;
+  updateQuantity: (id: string | number, quantity: number, size?: string) => void;
+  removeFromCart: (id: string | number, size?: string) => void;
+  clearCart: () => void;
+  cartCount: number;
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
+const getSafeStorage = (): Storage | null => {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  try {
+    return window.localStorage;
+  } catch {
+    return null;
+  }
+};
+
 export const CartProvider = ({ children }: { children: React.ReactNode }) => {
-    // Initial state: khali array
-    const [cart, setCart] = useState<CartItem[]>([]);
-    const [isMounted, setIsMounted] = useState(false);
-    const [persistCart, setPersistCart] = useState(true);
+  const [cart, setCart] = useState<CartItem[]>([]);
+  const [isMounted, setIsMounted] = useState(false);
+  const [persistCart, setPersistCart] = useState(true);
 
-    // Ye useEffect sirf client side par chalega
-    useEffect(() => {
-        setIsMounted(true);
-        const savedCart = localStorage.getItem('atelier-cart');
-        if (savedCart) {
-            try {
-                setCart(JSON.parse(savedCart));
-            } catch (e) {
-                console.error("Failed to parse cart", e);
-            }
-        }
-    }, []);
-
-    // Save cart to local storage (isMounted check k sath)
-   // Save cart to local storage (isMounted check ke saath)
-useEffect(() => {
-    if (!isMounted || !persistCart) return;
+  useEffect(() => {
+    setIsMounted(true);
+    const storage = getSafeStorage();
+    if (!storage) return;
 
     try {
-        // Fix: Save sirf zaroori fields, images ko hata dein!
-        const lightweightCart = cart.map(({ images, ...item }) => item);
-        localStorage.setItem('atelier-cart', JSON.stringify(lightweightCart));
-    } catch (error: unknown) {
-        const isQuotaError =
-            error instanceof DOMException &&
-            (error.name === 'QuotaExceededError' || error.name === 'NS_ERROR_DOM_QUOTA_REACHED');
-
-        if (isQuotaError) {
-            console.warn('LocalStorage full ho gaya hai.');
-            setPersistCart(false);
+      const savedCart = storage.getItem('atelier-cart');
+      if (savedCart) {
+        const parsedCart = JSON.parse(savedCart);
+        if (Array.isArray(parsedCart)) {
+          setCart(parsedCart);
         }
+      }
+    } catch (e) {
+      console.error('Failed to parse cart', e);
     }
-}, [cart, isMounted, persistCart]);
+  }, []);
 
-    const addToCart = (product: Arrival, quantity: number = 1, size?: string) => {
-        setCart((prevCart) => {
-            const existingIndex = prevCart.findIndex((item) =>
-                item.id === product.id && (item.size || undefined) === (size || undefined)
-            );
+  useEffect(() => {
+    if (!isMounted || !persistCart) return;
 
-            if (existingIndex >= 0) {
-                const updated = [...prevCart];
-                updated[existingIndex] = {
-                    ...updated[existingIndex],
-                    quantity: updated[existingIndex].quantity + quantity,
-                };
-                return updated;
-            }
+    const storage = getSafeStorage();
+    if (!storage) return;
 
-            return [...prevCart, { ...product, quantity, ...(size ? { size } : {}) }];
-        });
-    };
+    try {
+      const lightweightCart = cart.map(({ images, ...item }) => item);
+      storage.setItem('atelier-cart', JSON.stringify(lightweightCart));
+    } catch (error: unknown) {
+      const isQuotaError =
+        error instanceof DOMException &&
+        (error.name === 'QuotaExceededError' || error.name === 'NS_ERROR_DOM_QUOTA_REACHED');
 
-    const updateQuantity = (id: string | number, quantity: number, size?: string) => {
-        setCart((prevCart) =>
-            prevCart.map((item) =>
-                item.id === id && (item.size || undefined) === (size || undefined)
-                    ? { ...item, quantity: Math.max(1, quantity) }
-                    : item
-            )
-        );
-    };
+      if (isQuotaError) {
+        console.warn('LocalStorage full ho gaya hai.');
+        setPersistCart(false);
+      }
+    }
+  }, [cart, isMounted, persistCart]);
 
-    const removeFromCart = (id: string | number, size?: string) => {
-        setCart((prevCart) =>
-            prevCart.filter(
-                (item) => !(item.id === id && (item.size || undefined) === (size || undefined))
-            )
-        );
-    };
+  const addToCart = (product: Arrival, quantity: number = 1, size?: string) => {
+    setCart((prevCart) => {
+      const existingIndex = prevCart.findIndex((item) => item.id === product.id && (item.size || undefined) === (size || undefined));
 
-    const clearCart = () => setCart([]);
+      if (existingIndex >= 0) {
+        const updated = [...prevCart];
+        updated[existingIndex] = {
+          ...updated[existingIndex],
+          quantity: updated[existingIndex].quantity + quantity,
+        };
+        return updated;
+      }
 
-    const cartCount = cart.reduce((total, item) => total + item.quantity, 0);
+      return [...prevCart, { ...product, quantity, ...(size ? { size } : {}) }];
+    });
+  };
 
-    return (
-        <CartContext.Provider value={{ cart, addToCart, updateQuantity, removeFromCart, clearCart, cartCount }}>
-            {children}
-        </CartContext.Provider>
+  const updateQuantity = (id: string | number, quantity: number, size?: string) => {
+    setCart((prevCart) =>
+      prevCart.map((item) =>
+        item.id === id && (item.size || undefined) === (size || undefined)
+          ? { ...item, quantity: Math.max(1, quantity) }
+          : item
+      )
     );
+  };
+
+  const removeFromCart = (id: string | number, size?: string) => {
+    setCart((prevCart) =>
+      prevCart.filter((item) => !(item.id === id && (item.size || undefined) === (size || undefined)))
+    );
+  };
+
+  const clearCart = () => setCart([]);
+
+  const cartCount = cart.reduce((total, item) => total + item.quantity, 0);
+
+  return (
+    <CartContext.Provider value={{ cart, addToCart, updateQuantity, removeFromCart, clearCart, cartCount }}>
+      {children}
+    </CartContext.Provider>
+  );
 };
 
 export const useCart = () => {
-    const context = useContext(CartContext);
-    if (context === undefined) {
-        throw new Error('useCart must be used within a CartProvider');
-    }
-    return context;
+  const context = useContext(CartContext);
+  if (context === undefined) {
+    throw new Error('useCart must be used within a CartProvider');
+  }
+  return context;
 };

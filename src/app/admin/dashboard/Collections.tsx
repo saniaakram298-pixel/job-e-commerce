@@ -7,12 +7,14 @@ export interface Collection {
   title: string;
   description?: string;
   price: number;
+  discountPrice?: number;
   collection?: string;
   category: string;
   img: string;
   images?: string[];
   tags?: string[];
   tag?: string;
+  colors?: Array<{ color: string; stock: number }>;
   stock: number;
   sizes?: Array<{ size: string; stock: number }>;
 }
@@ -60,9 +62,11 @@ export const Home: React.FC<CollectionsProps> = ({
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState('');
   const [price, setPrice] = useState('');
+  const [discountPrice, setDiscountPrice] = useState('');
   const [description, setDescription] = useState('');
   const [badge, setBadge] = useState('');
   const [sizesInput, setSizesInput] = useState('Free Size');
+  const [colorsInput, setColorsInput] = useState('Black');
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [editingItem, setEditingItem] = useState<Collection | null>(null);
   const [editPayload, setEditPayload] = useState<EditPayload | null>(null);
@@ -91,11 +95,51 @@ export const Home: React.FC<CollectionsProps> = ({
 
   useEffect(() => {
     setLocalCollections(collections);
-  }, [collections]);
+    setIsLoadingData(Boolean(isLoading && collections.length === 0));
+  }, [collections, isLoading]);
 
   useEffect(() => {
-    setIsLoadingData(Boolean(isLoading && collections.length === 0));
-  }, [isLoading, collections.length]);
+    if (collections.length > 0) return;
+
+    let isCancelled = false;
+
+    const loadCollections = async () => {
+      setIsLoadingData(true);
+      try {
+        const response = await fetch('/api/collections?page=1&limit=1000');
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data?.error || 'Failed to load collections');
+        }
+
+        // Safely access collections array
+        const fetchedCollections = Array.isArray(data?.collections) 
+          ? data.collections.filter((item: any) => item && typeof item === 'object') 
+          : [];
+
+        if (!isCancelled) {
+          setLocalCollections(fetchedCollections);
+        }
+      } catch (error) {
+        if (!isCancelled) {
+          const errorMessage = error instanceof Error ? error.message : 'Unable to load collections.';
+          setErrorMessage(errorMessage);
+          console.error('Error loading collections:', error);
+        }
+      } finally {
+        if (!isCancelled) {
+          setIsLoadingData(false);
+        }
+      }
+    };
+
+    loadCollections();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [collections.length]);
 
   const stats = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -108,25 +152,32 @@ export const Home: React.FC<CollectionsProps> = ({
   const filteredCollections = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
 
-    return localCollections.filter(item => {
-      const itemCollection = (item.collection || item.tag || '').toLowerCase().replace(/\s+/g, '-');
-      if (!showAllSections && itemCollection !== displaySection) return false;
+    return localCollections
+      .filter(item => item && typeof item === 'object') // Safely filter out invalid items
+      .filter(item => {
+        try {
+          const itemCollection = (item?.collection || item?.tag || '').toLowerCase().replace(/\s+/g, '-');
+          if (!showAllSections && itemCollection !== displaySection) return false;
 
-      if (!normalizedSearch) return true;
+          if (!normalizedSearch) return true;
 
-      const searchText = [
-        item.title,
-        item.description,
-        item.category,
-        item.collection,
-        ...(item.tags ?? (item.tag ? [item.tag] : [])),
-      ]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase();
+          const searchText = [
+            item?.title,
+            item?.description,
+            item?.category,
+            item?.collection,
+            ...(item?.tags ?? (item?.tag ? [item.tag] : [])),
+          ]
+            .filter(Boolean)
+            .join(' ')
+            .toLowerCase();
 
-      return searchText.includes(normalizedSearch);
-    });
+          return searchText.includes(normalizedSearch);
+        } catch (error) {
+          console.warn('Error filtering collection item:', error);
+          return false;
+        }
+      });
   }, [localCollections, searchTerm, displaySection]);
 
   const visibleCollections = useMemo(() => filteredCollections, [filteredCollections]);
@@ -165,10 +216,12 @@ export const Home: React.FC<CollectionsProps> = ({
     setTitle('');
     setCategory('');
     setPrice('');
+    setDiscountPrice('');
     setStock('10');
     setDescription('');
     setBadge('');
     setSizesInput('Free Size');
+    setColorsInput('Black');
     setDetailDescription('');
     setImagePreview(null);
     setDetailImages([]);
@@ -295,16 +348,24 @@ export const Home: React.FC<CollectionsProps> = ({
       .map(size => size.trim())
       .filter(Boolean)
       .map(size => ({ size, stock: Number(stock) || 10 }));
+    const parsedColors = colorsInput
+      .split(',')
+      .map(color => color.trim())
+      .filter(Boolean)
+      .map(color => ({ color, stock: Number(stock) || 10 }));
+    const parsedDiscountPrice = discountPrice ? Number(discountPrice) : undefined;
 
     const productData = {
       title,
       description,
       price: parseFloat(price),
+      discountPrice: parsedDiscountPrice,
       category,
       img: imagePreview,
       images,
       collection: selectedCollection,
       tags: [selectedTag, badge].filter(Boolean),
+      colors: parsedColors,
       stock: Number(stock) || 10,
       sizes: parsedSizes.length > 0 ? parsedSizes : [{ size: 'Free Size', stock: Number(stock) || 10 }],
     };
@@ -318,7 +379,12 @@ export const Home: React.FC<CollectionsProps> = ({
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || 'Failed to save product');
 
-      setLocalCollections(prev => [result, ...prev]);
+      setLocalCollections(prev => [{
+        ...result,
+        discountPrice: parsedDiscountPrice,
+        colors: parsedColors,
+        sizes: parsedSizes.length > 0 ? parsedSizes : [{ size: 'Free Size', stock: Number(stock) || 10 }],
+      }, ...prev]);
       setSuccessMessage(`✓ "${title}" added successfully!`);
       resetForm();
       setShowForm(false);
@@ -332,84 +398,55 @@ export const Home: React.FC<CollectionsProps> = ({
   };
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-700 p-6 bg-black min-h-screen text-white">
-      <div className="space-y-3">
-        <p className="text-[10px] uppercase tracking-[0.3em] text-neutral-500">Admin</p>
-        <h1 className="text-4xl font-black">{componentTitle}</h1>
-        <p className="max-w-2xl text-sm text-neutral-400">
-          Manage the items that should appear in the {componentTitle === 'Home' ? 'homepage sections' : 'frontend collection module'}.
-        </p>
-      </div>
+    <div className="space-y-8 animate-in fade-in duration-700 p-6 min-h-screen">
       {isLoadingData ? (
         <div className="text-center py-20 text-neutral-500">Loading your inventory...</div>
       ) : (
         <>
-          <div className="grid grid-cols-1 gap-5 md:grid-cols-3 lg:grid-cols-4">
-            <div className="col-span-1 md:col-span-3 lg:col-span-4 p-7 rounded-2xl bg-gradient-to-br from-[#E5A93A] to-[#8C6219] text-black shadow-[0_10px_30px_rgba(229,169,58,0.2)] flex flex-col justify-between">
-              <div className="flex justify-between items-start">
-                <Package className="w-10 h-10 opacity-90" />
-                <span className="bg-black/10 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-tighter">Live Database</span>
+          <div className="rounded-[32px] border border-neutral-800/40 bg-[#050505] p-6 shadow-[0_32px_80px_rgba(0,0,0,0.35)]">
+            <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+              <div className="space-y-2">
+                <div className="flex flex-wrap items-center gap-3">
+                  <span className="rounded-full bg-[#E5A93A]/15 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.25em] text-[#E5A93A]">Products</span>
+                  <span className="text-sm text-neutral-400">Premium product data table</span>
+                </div>
+                <h2 className="text-3xl font-semibold text-white tracking-tight">Product Inventory</h2>
               </div>
-              <div className="mt-6">
-                <h3 className="text-4xl font-black leading-none">{filteredCollections.length}</h3>
-                <p className="text-xs uppercase tracking-[0.2em] font-bold mt-1 opacity-80">Total Inventory Items</p>
+
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                <div className="rounded-3xl border border-neutral-800/60 bg-white/5 px-4 py-3 text-sm text-neutral-300">
+                  <p className="text-[10px] uppercase tracking-[0.35em] text-neutral-500">Total products</p>
+                  <p className="mt-2 text-2xl font-semibold text-white">{filteredCollections.length}</p>
+                </div>
+                <button
+                  onClick={() => setShowForm(prev => !prev)}
+                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#E5A93A] px-5 py-3 text-sm font-semibold uppercase tracking-[0.2em] text-black transition hover:bg-[#ffbf42] shadow-[0_18px_40px_rgba(229,169,58,0.18)]"
+                >
+                  <Plus className={`w-4 h-4 transition-transform duration-300 ${showForm ? 'rotate-45' : ''}`} />
+                  {showForm ? 'Cancel' : 'Add Product'}
+                </button>
               </div>
             </div>
-          </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {categories.map(cat => (
-              <div key={cat} className="p-5 rounded-2xl border border-neutral-800 bg-[#121212] hover:bg-[#181818] hover:border-[#E5A93A] transition-all group cursor-default">
-                <p className="text-[9px] text-neutral-500 uppercase tracking-widest mb-2 font-bold group-hover:text-[#E5A93A]">{cat}</p>
-                <div className="flex items-baseline gap-1">
-                  <h4 className="text-2xl font-semibold text-white">{stats[cat] || 0}</h4>
-                  <span className="text-[10px] text-neutral-600 font-bold uppercase">Items</span>
+            <div className="mt-6 grid gap-4 lg:grid-cols-[1.5fr_1fr]">
+              <div className="relative w-full">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-neutral-500" />
+                <input
+                  type="text"
+                  placeholder="Search products..."
+                  className="w-full bg-[#0A0A0A] border border-neutral-800 rounded-2xl py-3 pl-12 pr-4 text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#E5A93A]/20 focus:border-[#E5A93A] transition-all"
+                  value={searchTerm}
+                  onChange={e => setSearchTerm(e.target.value)}
+                />
+              </div>
+
+              <div className="hidden lg:flex items-center justify-end">
+                <div className="rounded-3xl border border-neutral-800/60 bg-white/5 px-4 py-3 text-sm text-neutral-300">
+                  <p className="text-[10px] uppercase tracking-[0.35em] text-neutral-500">Filtered items</p>
+                  <p className="mt-2 text-2xl font-semibold text-white">{visibleCollections.length}</p>
                 </div>
               </div>
-            ))}
-          </div>
-
-          {showSectionTabs ? (
-            <div className="flex border-b border-neutral-800 gap-6">
-              {sections.map(sec => (
-                <button
-                  key={sec.id}
-                  onClick={() => setDisplaySection(sec.id)}
-                  className={`pb-4 text-xs font-bold uppercase tracking-widest transition-all ${displaySection === sec.id ? 'text-[#E5A93A]' : 'text-neutral-500 hover:text-neutral-300'}`}
-                >
-                  {sec.label}
-                  {displaySection === sec.id && <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-[#E5A93A] animate-in fade-in duration-300" />}
-                </button>
-              ))}
             </div>
-          ) : (
-            <div className="flex items-center justify-between bg-[#111] p-5 rounded-2xl border border-neutral-800/50 shadow-inner">
-              <div>
-                <p className="text-xs uppercase tracking-widest text-neutral-500">All collection items</p>
-                <h2 className="text-lg font-semibold text-white">Collection overview</h2>
-              </div>
-            </div>
-          )}
-
-          <div className="flex flex-col md:flex-row gap-4 items-center justify-between bg-[#111] p-5 rounded-2xl border border-neutral-800/50 shadow-inner">
-            <div className="relative w-full md:w-1/2">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-neutral-600" />
-              <input
-                type="text"
-                placeholder="Search current selection..."
-                className="w-full bg-[#050505] border border-neutral-800 rounded-xl py-3 pl-12 pr-4 text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#E5A93A]/20 focus:border-[#E5A93A] transition-all"
-                value={searchTerm}
-                onChange={e => setSearchTerm(e.target.value)}
-              />
-            </div>
-
-            <button
-              onClick={() => setShowForm(prev => !prev)}
-              className="w-full md:w-auto flex items-center justify-center gap-3 bg-[#E5A93A] hover:bg-[#ffbf42] text-black px-8 py-3 rounded-xl font-black text-xs uppercase tracking-widest transition-all hover:scale-[1.02] active:scale-95 shadow-lg shadow-[#E5A93A]/10"
-            >
-              <Plus className={`w-4 h-4 transition-transform duration-300 ${showForm ? 'rotate-45' : ''}`} />
-              {showForm ? 'Cancel Entry' : 'Add Inside Current Block'}
-            </button>
           </div>
 
           {showForm && (
@@ -472,6 +509,27 @@ export const Home: React.FC<CollectionsProps> = ({
                     <option value="home">Home Page</option>
                     <option value="collection">Collection Page</option>
                   </select>
+                </label>
+                <label className="space-y-2 text-sm">
+                  <span className="text-neutral-400 uppercase tracking-[0.2em] text-[10px]">Discount Price</span>
+                  <input
+                    type="number"
+                    value={discountPrice}
+                    onChange={e => setDiscountPrice(e.target.value)}
+                    placeholder="Optional discount"
+                    min="0"
+                    step="0.01"
+                    className="w-full bg-[#111] border border-neutral-800 rounded-xl px-4 py-3 text-white outline-none"
+                  />
+                </label>
+                <label className="space-y-2 text-sm">
+                  <span className="text-neutral-400 uppercase tracking-[0.2em] text-[10px]">Colors</span>
+                  <input
+                    value={colorsInput}
+                    onChange={e => setColorsInput(e.target.value)}
+                    placeholder="e.g. Black, Red"
+                    className="w-full bg-[#111] border border-neutral-800 rounded-xl px-4 py-3 text-white outline-none"
+                  />
                 </label>
                 <label className="space-y-2 text-sm md:col-span-2">
                   <span className="text-neutral-400 uppercase tracking-[0.2em] text-[10px]">Tags</span>
@@ -686,57 +744,68 @@ export const Home: React.FC<CollectionsProps> = ({
             )}
           </div>
 
-          <div className="overflow-x-auto rounded-3xl border border-neutral-800 bg-[#111] p-4">
+          <div className="overflow-x-auto rounded-[32px] border border-neutral-800/20 bg-[#060606] p-4 shadow-[0_30px_80px_rgba(0,0,0,0.55)]">
             {visibleCollections.length > 0 ? (
-              <table className="min-w-full border-collapse text-left text-sm text-white">
+              <table className="min-w-full border-separate border-spacing-y-3 text-left text-sm text-white">
                 <thead>
-                  <tr className="border-b border-neutral-800 text-[10px] uppercase tracking-[0.3em] text-neutral-400">
-                    <th className="px-4 py-3">Image</th>
-                    <th className="px-4 py-3">Title</th>
-                    <th className="px-4 py-3">Price</th>
-                    <th className="px-4 py-3">Description</th>
-                    <th className="px-4 py-3">Section</th>
-                    <th className="px-4 py-3">Actions</th>
+                  <tr className="text-[10px] uppercase tracking-[0.28em] text-neutral-400">
+                    <th className="px-5 py-4">Product ID</th>
+                    <th className="px-5 py-4">Image</th>
+                    <th className="px-5 py-4">Title</th>
+                    <th className="px-5 py-4">Price</th>
+                    <th className="px-5 py-4">Size</th>
+                    <th className="px-5 py-4">Color</th>
+                    <th className="px-5 py-4">Stock</th>
+                    <th className="px-5 py-4">Category</th>
+                    <th className="px-5 py-4">Discount</th>
+                    <th className="px-5 py-4">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {visibleCollections.map(item => (
-                    <tr key={item._id} className="border-b border-neutral-800 hover:bg-white/5">
-                      <td className="px-4 py-4 align-middle">
-                        <img src={item.img} alt={item.title} className="h-16 w-16 rounded-2xl object-cover" />
-                      </td>
-                      <td className="px-4 py-4 align-middle font-semibold text-white">{item.title}</td>
-                      <td className="px-4 py-4 align-middle text-[#E5A93A]">${item.price}</td>
-                      <td className="px-4 py-4 align-middle text-neutral-400 truncate max-w-[300px]">{item.description || '-'}</td>
-                      <td className="px-4 py-4 align-middle">
-                        <select
-                          value={item.collection || 'our-collection'}
-                          onChange={e => handleSectionChange(item, e.target.value)}
-                          className="w-full bg-[#111] border border-neutral-800 rounded-xl px-3 py-2 text-white outline-none"
-                        >
-                          {sections.map(sec => (
-                            <option key={sec.id} value={sec.id}>{sec.label}</option>
-                          ))}
-                        </select>
-                      </td>
-                      <td className="px-4 py-4 align-middle flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => startEditing(item)}
-                          className="rounded-full bg-white/10 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.2em] text-white hover:bg-[#E5A93A] transition"
-                        >
-                          <Pencil className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDelete(item._id)}
-                          className="rounded-full bg-black/70 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.2em] text-white hover:bg-red-500/90 transition"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                  {visibleCollections
+                    .filter(item => item?._id)
+                    .map(item => {
+                      if (!item?._id) return null;
+                      const sizeText = item.sizes?.map(size => size.size).filter(Boolean).join(', ') || 'Free Size';
+                      const colorText = item.colors?.map(color => color.color).filter(Boolean).join(', ') || '-';
+                      const discountText = item.discountPrice != null && item.price
+                        ? `${Math.round(((item.price - item.discountPrice) / item.price) * 100)}%`
+                        : '-';
+
+                      return (
+                        <tr key={item._id} className="rounded-[28px] bg-[#0D0D0D] shadow-[0_10px_30px_rgba(0,0,0,0.25)] transition hover:bg-[#131313]">
+                          <td className="px-5 py-4 align-middle font-mono text-[11px] text-neutral-400 break-all">{item._id}</td>
+                          <td className="px-5 py-4 align-middle">
+                            <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-3xl border border-neutral-800 bg-[#080808]">
+                              <img src={item.img || '/placeholder.jpg'} alt={item.title || 'Product'} className="h-full w-full object-cover" />
+                            </div>
+                          </td>
+                          <td className="px-5 py-4 align-middle font-semibold text-white">{item.title || 'N/A'}</td>
+                          <td className="px-5 py-4 align-middle text-[#E5A93A]">${item.price?.toFixed?.(2) ?? item.price ?? 0}</td>
+                          <td className="px-5 py-4 align-middle text-neutral-400">{sizeText || '-'}</td>
+                          <td className="px-5 py-4 align-middle text-neutral-400">{colorText || '-'}</td>
+                          <td className="px-5 py-4 align-middle text-neutral-100">{item.stock ?? 0}</td>
+                          <td className="px-5 py-4 align-middle text-neutral-400">{item.category || '-'}</td>
+                          <td className="px-5 py-4 align-middle text-[#A0F1B8]">{discountText}</td>
+                          <td className="px-5 py-4 align-middle flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => startEditing(item)}
+                              className="rounded-full bg-white/10 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.2em] text-white hover:bg-[#E5A93A] transition"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDelete(item._id)}
+                              className="rounded-full bg-black/70 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.2em] text-white hover:bg-red-500/90 transition"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
                 </tbody>
               </table>
             ) : (

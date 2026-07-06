@@ -1,24 +1,58 @@
-"use client";
-import React, { useMemo, useState } from 'react';
+'use client';
+
+import React, { useMemo, useState, Suspense } from 'react';
 import { useRouter } from 'next/navigation';
-import { useQuery } from '@tanstack/react-query';
+import dynamic from 'next/dynamic';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-    LayoutGrid, Package, Layers, Truck, Sun, Moon,
-    LogOut, ArrowUpRight, AlertCircle, Bell, Search,
-    UserCircle2, ChevronDown, Home as HomeIcon, ExternalLink, X,
-    MessageSquare, Activity
+  LayoutGrid, Package, Layers, Truck, Sun, Moon,
+  LogOut, ArrowUpRight, AlertCircle, Bell, Search,
+  UserCircle2, ChevronDown, Home as HomeIcon, ExternalLink, X,
 } from 'lucide-react';
 import { useAuthStore } from '@/hooks/useAuth';
 import { api } from '@/lib/client';
-import { Home, Collection as CollectionAdmin } from './Collections';
+import { Home } from './Collections';
 import { Inventory } from './Inventory';
 import { Orders } from './Orders';
-import RevenueChart from '@/components/admin/RevenueChart';
-import RepeatedOrders from '@/components/admin/RepeatedOrdersSection';
-import BestSellers from '@/components/admin/BestSellersSection';
-import ReviewsOverview from '@/components/admin/ReviewsOverview';
-import ReviewsComponent from '@/components/admin/ReviewsComponent';
-import ActivityLogComponent from '@/components/admin/ActivityLog';
+import { AdminSidebar } from '@/components/admin/AdminSidebar';
+import { DashboardSkeleton, TabContentSkeleton } from '@/components/DashboardSkeleton';
+
+// DYNAMIC IMPORTS - Code splitting for instant dashboard load
+const AnalyticsDashboard = dynamic(() => import('./AnalyticsDashboard'), {
+  loading: () => <TabContentSkeleton />,
+});
+
+const ProductsLog = dynamic(() => import('@/components/admin/ProductsLog').then(mod => ({ default: mod.ProductsLog })), {
+  loading: () => <TabContentSkeleton />,
+});
+
+const ReviewsComponent = dynamic(() => import('@/components/admin/ReviewsComponent'), {
+  loading: () => <TabContentSkeleton />,
+});
+
+const ActivityLogComponent = dynamic(() => import('@/components/admin/ActivityLog'), {
+  loading: () => <TabContentSkeleton />,
+});
+
+const CategoryView = dynamic(() => import('@/components/admin/CategoryView'), {
+  loading: () => <TabContentSkeleton />,
+});
+
+const RevenueChart = dynamic(() => import('@/components/admin/RevenueChart'), {
+  loading: () => <div className="rounded-2xl border border-neutral-200 bg-white p-6 h-80 animate-pulse" />,
+});
+
+const RepeatedOrders = dynamic(() => import('@/components/admin/RepeatedOrdersSection'), {
+  loading: () => <div className="rounded-2xl border border-neutral-200 bg-white p-6 h-64 animate-pulse" />,
+});
+
+const BestSellers = dynamic(() => import('@/components/admin/BestSellersSection'), {
+  loading: () => <div className="rounded-2xl border border-neutral-200 bg-white p-6 h-80 animate-pulse" />,
+});
+
+const ReviewsOverview = dynamic(() => import('@/components/admin/ReviewsOverview'), {
+  loading: () => <div className="rounded-2xl border border-neutral-200 bg-white p-6 h-64 animate-pulse" />,
+});
 
 interface CollectionItem {
     _id: string;
@@ -83,12 +117,14 @@ export default function AtelierDashboardClient({ collections: initialCollections
     const [showNotificationDropdown, setShowNotificationDropdown] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [dismissedNotifications, setDismissedNotifications] = useState<Set<string>>(new Set());
+    const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+    const [showUploadForm, setShowUploadForm] = useState(false);
 
     const query = useQuery<{ collections: CollectionItem[]; total: number }, Error>({
         queryKey: ['admin-collections', manualRetryCount],
         queryFn: fetchCollectionsFromApi,
         initialData: { collections: initialCollections, total: initialTotal ?? initialCollections?.length ?? 0 },
-        staleTime: 1000 * 60 * 2,
+        staleTime: 1000 * 30,
         refetchOnWindowFocus: false,
         refetchOnReconnect: false,
         refetchOnMount: false,
@@ -114,6 +150,8 @@ export default function AtelierDashboardClient({ collections: initialCollections
         enabled: Boolean(token),
     });
 
+    const queryClient = useQueryClient();
+
     const { data: pendingOrders = [] } = useQuery<any[], Error>({
         queryKey: ['dashboard-pending-orders'],
         queryFn: async () => {
@@ -124,6 +162,27 @@ export default function AtelierDashboardClient({ collections: initialCollections
         staleTime: 1000 * 30,
         refetchOnWindowFocus: false,
         enabled: Boolean(token),
+    });
+
+    const { data: adminCategories = [] } = useQuery<{ slug: string; name: string; productCount: number }[], Error>({
+        queryKey: ['admin-categories'],
+        queryFn: async () => {
+            const response = await fetch('/api/categories', { cache: 'no-store' });
+            if (!response.ok) {
+                throw new Error('Failed to load categories');
+            }
+            const data = await response.json();
+            return Array.isArray(data.categories)
+                ? data.categories.map((cat: any) => ({
+                      slug: String(cat.slug || cat.name || '').trim(),
+                      name: String(cat.name || cat.slug || '').trim(),
+                      productCount: Number(cat.productCount || 0),
+                  }))
+                : [];
+        },
+        staleTime: 1000 * 60 * 5,
+        refetchOnWindowFocus: false,
+        retry: 2,
     });
 
     const serverError = error?.message ?? initialError ?? null;
@@ -144,6 +203,7 @@ export default function AtelierDashboardClient({ collections: initialCollections
     const sidebarItems = [
         { id: 'overview', label: 'Overview', icon: <LayoutGrid className="w-4 h-4" /> },
         { id: 'home', label: 'Home', icon: <Layers className="w-4 h-4" /> },
+        { id: 'products', label: 'Products Log', icon: <Package className="w-4 h-4" /> },
         { id: 'orders', label: 'Orders', icon: <Truck className="w-4 h-4" /> },
         { id: 'inventory', label: 'Inventory', icon: <Package className="w-4 h-4" /> },
     ];
@@ -193,6 +253,11 @@ export default function AtelierDashboardClient({ collections: initialCollections
     const handleLogout = () => {
         logout();
         window.location.href = '/login';
+    };
+
+    const handleCategorySelect = (categoryName: string) => {
+        setSelectedCategory(categoryName);
+        setActiveTab('category');
     };
 
     const handleNotificationClick = (orderId: string, orderStatus: string) => {
@@ -275,48 +340,16 @@ export default function AtelierDashboardClient({ collections: initialCollections
 
     return (
         <div className={`flex h-screen font-sans transition-colors duration-500 ${darkMode ? 'bg-[#0A0A0A] text-gray-200' : 'bg-[#F9F9F9] text-gray-900'}`}>
-            <aside className={`fixed inset-y-0 left-0 z-40 w-64 ${darkMode ? 'bg-[#0F0F0F] border-neutral-900' : 'bg-white border-neutral-200'} border-r transform transition-transform duration-300 lg:relative lg:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} flex flex-col justify-between py-6 px-4`}>
-                <div className="space-y-8">
-                    <div className="space-y-3">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="text-sm font-bold uppercase tracking-[0.3em]">Atelier</p>
-                                <h2 className="text-xl font-black">Admin</h2>
-                            </div>
-                            <button onClick={() => setIsSidebarOpen(false)} className="text-neutral-500 hover:text-[#E5A93A]">X</button>
-                        </div>
-                    </div>
-                    <nav className="space-y-1">
-                        {[
-                            { id: 'overview', label: 'Overview', icon: <LayoutGrid className="w-4 h-4" /> },
-                            { id: 'home', label: 'Home', icon: <Layers className="w-4 h-4" /> },
-                            { id: 'orders', label: 'Orders', icon: <Truck className="w-4 h-4" /> },
-                            { id: 'inventory', label: 'Inventory', icon: <Package className="w-4 h-4" /> },
-                            { id: 'reviews', label: 'Reviews', icon: <MessageSquare className="w-4 h-4" /> },
-                            { id: 'activity', label: 'Activity Log', icon: <Activity className="w-4 h-4" /> },
-                        ].map((tab) => (
-                            <button
-                                key={tab.id}
-                                onClick={() => setActiveTab(tab.id)}
-                                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all ${activeTab === tab.id ? (darkMode ? 'bg-[#141414] text-[#E5A93A] border border-neutral-800' : 'bg-[#E5A93A]/10 text-[#8C6219] border border-[#E5A93A]/20') : 'text-neutral-500 hover:text-[#E5A93A]'}`}
-                            >
-                                {tab.icon}
-                                <span className="text-sm font-medium">{tab.label}</span>
-                            </button>
-                        ))}
-                    </nav>
-                </div>
-
-                <div className="space-y-4">
-                    <button
-                        onClick={handleLogout}
-                        className="w-full rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm font-bold uppercase tracking-[0.2em] text-red-600 transition hover:bg-red-500/20 hover:border-red-500/50 flex items-center justify-center gap-2"
-                    >
-                        <LogOut className="w-4 h-4" />
-                        Logout
-                    </button>
-                </div>
-            </aside>
+            <AdminSidebar
+                activeTab={activeTab}
+                onTabChange={setActiveTab}
+                onCategorySelect={handleCategorySelect}
+                categories={adminCategories.map((category) => ({ id: category.slug, label: category.name }))}
+                isSidebarOpen={isSidebarOpen}
+                onClose={() => setIsSidebarOpen(false)}
+                darkMode={darkMode}
+                onLogout={handleLogout}
+            />
 
             <main className="flex-1 overflow-y-auto p-4 md:p-8 lg:p-12">
                 {isInitialLoad && (
@@ -562,23 +595,28 @@ export default function AtelierDashboardClient({ collections: initialCollections
                 )}
 
                 {activeTab === 'home' && (
-                    <div className="space-y-10">
-                        <Home 
-                            collections={collections} 
-                            totalItems={totalItems}
-                            onUpdate={() => refetch().then(() => {})}
-                            isLoading={isFetching}
-                        />
-                        <CollectionAdmin 
-                            collections={collections} 
-                            totalItems={totalItems}
-                            onUpdate={() => refetch().then(() => {})} 
-                            isLoading={isFetching}
+                    <div className="space-y-8">
+                        {/* Analytics Dashboard - Above Categories */}
+                        <AnalyticsDashboard
+                            onCategorySelect={handleCategorySelect}
+                            onCategoryCreated={() => queryClient.invalidateQueries({ predicate: (query) => query.queryKey[0] === 'admin-categories' })}
                         />
                     </div>
                 )}
                 {activeTab === 'orders' && <Orders />}
                 {activeTab === 'inventory' && <Inventory />}
+                {activeTab === 'products' && (
+                    <div className="space-y-8 animate-in fade-in duration-700">
+                        <ProductsLog
+                            darkMode={darkMode}
+                            categoryFilter={selectedCategory || undefined}
+                            onRefresh={() => {
+                                setManualRetryCount((prev) => prev + 1);
+                                refetch();
+                            }}
+                        />
+                    </div>
+                )}
                 {activeTab === 'reviews' && (
                     <div className="space-y-8 animate-in fade-in duration-700">
                         <ReviewsComponent darkMode={darkMode} />
@@ -587,6 +625,16 @@ export default function AtelierDashboardClient({ collections: initialCollections
                 {activeTab === 'activity' && (
                     <div className="space-y-8 animate-in fade-in duration-700">
                         <ActivityLogComponent darkMode={darkMode} />
+                    </div>
+                )}
+
+                {activeTab === 'category' && selectedCategory && (
+                    <div className="animate-in fade-in duration-700">
+                        <CategoryView
+                            categoryName={selectedCategory}
+                            onBack={() => setActiveTab('overview')}
+                            darkMode={darkMode}
+                        />
                     </div>
                 )}
             </main>

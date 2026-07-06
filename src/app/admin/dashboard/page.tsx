@@ -1,4 +1,4 @@
-import { connectDB, withQueryTimeout } from '@/lib/mongodb';
+import { connectDB } from '@/lib/mongodb';
 import { Collection as CollectionModel } from '@/models/Collection';
 import dynamic from 'next/dynamic';
 
@@ -10,22 +10,15 @@ async function fetchInitialCollections() {
   try {
     await connectDB();
 
+    // Run queries without an artificial timeout wrapper to avoid premature cancellations
     const [collections, total] = await Promise.all([
-      withQueryTimeout(
-        () =>
-          CollectionModel.find()
-            .select('_id title tag img category stock price description createdAt updatedAt')
-            .sort({ createdAt: -1 })
-            .limit(20)
-            .lean()
-            .maxTimeMS(25000)
-            .exec(),
-        30000
-      ),
-      withQueryTimeout(
-        () => CollectionModel.estimatedDocumentCount().maxTimeMS(10000).exec(),
-        15000
-      ),
+      CollectionModel.find()
+        .select('_id title tag img category stock price description collection createdAt updatedAt')
+        .sort({ createdAt: -1 })
+        .limit(20)
+        .lean()
+        .exec(),
+      CollectionModel.estimatedDocumentCount().exec(),
     ]);
 
     const sanitized = (collections || []).map((item: any) => ({
