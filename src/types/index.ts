@@ -1,15 +1,4 @@
-export type ProductCategory = 
-  | 'bridal' 
-  | 'groom' 
-  | 'formal' 
-  | 'informal' 
-  | 'children' 
-  | 'men' 
-  | 'women' 
-  | 'old-people' 
-  | 'young' 
-  | 'new-arrival'
-  | 'accessories';
+export type ProductCategory = string;
 
 export interface Product {
   _id: string;
@@ -35,6 +24,8 @@ export interface Product {
   careInstructions?: string;
   fit?: string;
   featured: boolean;
+  isBestSeller?: boolean;
+  isTrending?: boolean;
   active: boolean;
   createdAt: string;
   updatedAt: string;
@@ -96,6 +87,33 @@ export interface Order {
   updatedAt: string;
 }
 
+export type ReturnStatus = 'pending' | 'verified' | 'approved' | 'rejected' | 'completed';
+
+export interface ReturnHistoryItem {
+  status: ReturnStatus;
+  note: string;
+  timestamp: string;
+}
+
+export interface ReturnRequest {
+  _id: string;
+  orderId: string | {
+    _id: string;
+    orderNumber: number;
+    orderStatus: string;
+    customerName?: string;
+    customerEmail?: string;
+    totalPrice?: number;
+  };
+  customerEmail: string;
+  reason: string;
+  details?: string;
+  status: ReturnStatus;
+  history: ReturnHistoryItem[];
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Address {
   street: string;
   city: string;
@@ -130,6 +148,8 @@ export interface Arrival {
   tags?: string[];
   rating?: number;
   featured?: boolean;
+  isBestSeller?: boolean;
+  isTrending?: boolean;
   collection?: string;
   _id?: string;
   stock?: number;
@@ -144,6 +164,7 @@ export interface HeroData {
   title: string;
   buttonText: string;
   imagePath: string;
+  images?: string[];
   href: string;
   subtitle?: string;
 }

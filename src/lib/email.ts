@@ -55,7 +55,7 @@ async function getTransporter() {
   return transporterPromise;
 }
 
-export async function sendOrderConfirmationEmail(options: EmailOptions) {
+export async function sendEmail(options: EmailOptions) {
   const transporter = await getTransporter();
 
   const info = await transporter.sendMail({
@@ -72,4 +72,8 @@ export async function sendOrderConfirmationEmail(options: EmailOptions) {
       console.info('[email] Preview URL:', previewUrl);
     }
   }
+}
+
+export async function sendOrderConfirmationEmail(options: EmailOptions) {
+  return sendEmail(options);
 }

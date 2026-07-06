@@ -1,55 +1,32 @@
-import mongoose, { Schema, Model } from 'mongoose';
+import mongoose, { Model } from 'mongoose';
 
 export interface IReview {
-  _id: mongoose.Types.ObjectId | string;
-  productId: string;
-  userId: string;
+  _id?: mongoose.Types.ObjectId | string;
+  name: string;
+  email?: string;
   rating: number;
-  title: string;
-  comment: string;
-  verified: boolean;
-  helpful: number;
-  createdAt: Date;
-  updatedAt: Date;
+  message: string;
+  productId?: string | null;
+  approved?: boolean;
+  createdAt?: Date;
 }
 
-const reviewSchema = new Schema<IReview>(
+const reviewSchema = new mongoose.Schema<IReview>(
   {
-    productId: {
-      type: String,
-      required: true,
-    },
-    userId: {
-      type: String,
-      required: true,
-    },
-    rating: {
-      type: Number,
-      required: true,
-      min: 1,
-      max: 5,
-    },
-    title: {
-      type: String,
-      required: true,
-    },
-    comment: {
-      type: String,
-      required: true,
-    },
-    verified: {
-      type: Boolean,
-      default: false,
-    },
-    helpful: {
-      type: Number,
-      default: 0,
-    },
+    name: { type: String, required: true },
+    email: { type: String },
+    rating: { type: Number, default: 5, min: 1, max: 5 },
+    message: { type: String, required: true },
+    productId: { type: String, default: null },
+    approved: { type: Boolean, default: false, index: true },
   },
-  { timestamps: true }
+  { timestamps: { createdAt: true, updatedAt: false } }
 );
 
-if (mongoose.models.Review) {
-  delete mongoose.models.Review;
+reviewSchema.index({ approved: 1, createdAt: -1 });
+
+if ((mongoose as any).models?.Review) {
+  delete (mongoose as any).models.Review;
 }
+
 export const Review: Model<IReview> = mongoose.model<IReview>('Review', reviewSchema);

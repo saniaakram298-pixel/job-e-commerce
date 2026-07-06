@@ -4,6 +4,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
 import BackButton from '@/components/BackButton';
+import Navbar from '@/components/Navbar';
 
 interface EditorialStory {
     id: string;
@@ -44,6 +45,16 @@ const defaultEditorialStories: EditorialStory[] = [
 export default function EditorialPage() {
     const [editorialStories, setEditorialStories] = useState<EditorialStory[]>(defaultEditorialStories);
     const [loading, setLoading] = useState(true);
+    const [scrolled, setScrolled] = useState(false);
+
+    useEffect(() => {
+        const handleScroll = () => {
+            setScrolled(window.scrollY > 50);
+        };
+
+        window.addEventListener('scroll', handleScroll);
+        return () => window.removeEventListener('scroll', handleScroll);
+    }, []);
 
     // Fetch editorial from MongoDB API
     useEffect(() => {
@@ -87,6 +98,7 @@ export default function EditorialPage() {
     }, []);
     return (
     <main className="min-h-screen bg-[#faf9f6] text-[#1a1a1a]">
+        <Navbar scrolled={scrolled} />
 
         {/* 1. HERO SECTION */}
         {/* 1. HERO SECTION WITH VIDEO BACKGROUND */}

@@ -8,7 +8,7 @@ import SmartSearchBar from './SmartSearchBar';
 
 const navLinks = [
   { name: 'Home', href: '/' },
-  { name: 'Collections', href: '/collections' },
+  { name: 'My Account', href: '/account' },
   { name: 'New Arrivals', href: '/new-arrivals' },
   { name: 'Editorial', href: '/editorial' },
   { name: 'The Journal', href: '/journal' },

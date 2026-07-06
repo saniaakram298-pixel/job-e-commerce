@@ -48,7 +48,7 @@ export default function PendingOrdersAlert() {
     },
     onSuccess: () => {
       setStatusMessage('Reminder sent successfully.');
-      queryClient.invalidateQueries(['admin-pending-orders']);
+      queryClient.invalidateQueries({ queryKey: ['admin-pending-orders'] });
     },
     onError: (error: any) => {
       setStatusMessage(error?.message || 'Unable to send reminder.');
@@ -165,7 +165,7 @@ export default function PendingOrdersAlert() {
                           const message = messageDrafts[order._id] ?? defaultMessage;
                           mutation.mutate({ orderId: order._id, message });
                         }}
-                        disabled={mutation.isLoading}
+                        disabled={mutation.isPending}
                         className="mt-4 inline-flex items-center gap-2 rounded-2xl bg-red-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         <Send className="w-4 h-4" />

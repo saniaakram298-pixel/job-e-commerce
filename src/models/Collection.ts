@@ -9,8 +9,10 @@ export interface ICollection {
   img: string;
   tags?: string[];
   sizes?: Array<{ size: string; stock: number }>;
+  colors?: Array<{ color: string; stock: number }>;
   stock: number;
   price?: number;
+  discountPrice?: number | null;
   description?: string;
   createdAt: Date;
   updatedAt: Date;
@@ -43,6 +45,12 @@ const collectionSchema = new Schema<ICollection>(
         stock: { type: Number, default: 0 },
       },
     ],
+    colors: [
+      {
+        color: String,
+        stock: { type: Number, default: 0 },
+      },
+    ],
     stock: {
       type: Number,
       default: 0,
@@ -50,6 +58,10 @@ const collectionSchema = new Schema<ICollection>(
     price: {
       type: Number,
       default: 0,
+    },
+    discountPrice: {
+      type: Number,
+      default: null,
     },
     description: {
       type: String,

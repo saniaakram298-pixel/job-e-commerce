@@ -1,6 +1,7 @@
 export type UserRole = 'customer' | 'admin';
 
 export interface User {
+  [x: string]: string | string[] | Address[] | boolean | undefined;
   _id: string;
   email: string;
   firstName: string;

@@ -3,18 +3,7 @@
  * These types should be used in client-side code
  */
 
-export type ProductCategory = 
-  | 'bridal' 
-  | 'groom' 
-  | 'formal' 
-  | 'informal' 
-  | 'children' 
-  | 'men' 
-  | 'women' 
-  | 'old-people' 
-  | 'young' 
-  | 'new-arrival'
-  | 'accessories';
+export type ProductCategory = string;
 
 export interface ProductTypedef {
   _id: string;

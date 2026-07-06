@@ -16,7 +16,8 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url);
     const grouped = searchParams.get('grouped') === 'true';
-    const limitPerCategory = parseInt(searchParams.get('limit') || '10');
+    const limitPerCategory = Math.min(20, Math.max(1, parseInt(searchParams.get('limit') || '20')));
+    const page = Math.max(1, parseInt(searchParams.get('page') || '1'));
     const categoriesParam = searchParams.get('categories');
     
     // Parse category list if provided
@@ -32,33 +33,36 @@ export async function GET(request: NextRequest) {
       return createErrorResponse('Invalid request. Use ?grouped=true', 400);
     }
 
-    // Get all available categories
-    const CATEGORIES: ProductCategory[] = [
-      'bridal',
-      'groom',
-      'formal',
-      'informal',
-      'children',
-      'men',
-      'women',
-      'old-people',
-      'young',
-      'new-arrival',
-      'accessories',
-    ];
+    // Get all available categories dynamically from the product collection when no explicit list is provided
+    let categoriesToFetch: ProductCategory[] = [];
+    if (targetCategories && targetCategories.length > 0) {
+      categoriesToFetch = targetCategories;
+    } else {
+      const distinctCategories = await Product.distinct('category', { active: true }) as string[];
+      categoriesToFetch = (distinctCategories || [])
+        .map((category) => String(category || '').trim().toLowerCase())
+        .filter((category): category is ProductCategory => category.length > 0);
+    }
 
-    const categoriesToFetch = targetCategories || CATEGORIES;
+    if (categoriesToFetch.length === 0) {
+      return createSuccessResponse([], 'No active categories found');
+    }
 
     // Fetch products for each category, sorted by newest first, limited to N items
     const results = await Promise.all(
       categoriesToFetch.map(async (category) => {
-        const products = await Product.find({
-          category,
-          active: true,
-        })
-          .sort({ createdAt: -1 }) // Newest first
-          .limit(limitPerCategory)
-          .lean();
+        const skip = (page - 1) * limitPerCategory;
+        const [products, total] = await Promise.all([
+          Product.find({
+            category,
+            active: true,
+          })
+            .sort({ createdAt: -1 }) // Newest first
+            .skip(skip)
+            .limit(limitPerCategory)
+            .lean(),
+          Product.countDocuments({ category, active: true }),
+        ]);
 
         return {
           category,
@@ -74,7 +78,9 @@ export async function GET(request: NextRequest) {
             createdAt: p.createdAt.toISOString(),
             tags: p.tags,
           })),
-          total: products.length,
+          total,
+          page,
+          limit: limitPerCategory,
         };
       })
     );

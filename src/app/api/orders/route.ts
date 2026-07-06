@@ -28,11 +28,28 @@ export async function GET(request: NextRequest) {
       return createErrorResponse('User not found', 401);
     }
 
-    let orders;
-    if (requestingUser.role === 'admin') {
-      orders = await Order.find({}).sort({ createdAt: -1 }).populate({ path: 'items.productId', select: 'name images img' });
-    } else {
-      orders = await Order.find({ userId }).sort({ createdAt: -1 }).populate({ path: 'items.productId', select: 'name images img' });
+    const query: Record<string, unknown> = {};
+    if (requestingUser.role !== 'admin') {
+      query.userId = userId;
+    }
+
+    const orders = await Order.find(query)
+      .sort({ createdAt: -1 })
+      .populate({ path: 'items.productId', select: 'name images img' })
+      .lean();
+
+    for (const order of orders as Array<Record<string, any>>) {
+      for (const item of order.items || []) {
+        const productRef = item.productId;
+        const hasProductDetails = productRef && typeof productRef === 'object' && ('img' in productRef || 'images' in productRef);
+
+        if (!hasProductDetails && productRef) {
+          const product = await Product.findById(productRef).select('name images img').lean();
+          if (product) {
+            item.productId = product;
+          }
+        }
+      }
     }
 
     return createSuccessResponse(orders, 'Orders fetched successfully');
@@ -69,32 +86,34 @@ export async function POST(request: NextRequest) {
         const color = item.color;
 
         if (!productId || !quantity || quantity <= 0) {
-          return createErrorResponse('Invalid item details in order', 400);
+          return createErrorResponse(`Invalid item details in order: productId=${productId}, quantity=${quantity}`, 400);
         }
 
         // If size provided
         if (size) {
+          const normalizedSize = (size || '').trim();
           const updatedProduct = await Product.findOneAndUpdate(
-            { _id: productId, 'sizes.size': size, 'sizes.stock': { $gte: quantity } },
+            { _id: productId, 'sizes.size': new RegExp(`^${normalizedSize}$`, 'i'), 'sizes.stock': { $gte: quantity } },
             { $inc: { 'sizes.$.stock': -quantity } },
             { new: true }
           );
           if (!updatedProduct) {
-            return createErrorResponse(`Product ${item.name || productId} with size ${size} is out of stock`, 400);
+            return createErrorResponse(`Product "${item.name || productId}" with size "${size}" is out of stock or not found`, 400);
           }
         } else if (color) {
+          const normalizedColor = (color || '').trim();
           const updatedProduct = await Product.findOneAndUpdate(
-            { _id: productId, 'colors.color': color, 'colors.stock': { $gte: quantity } },
+            { _id: productId, 'colors.color': new RegExp(`^${normalizedColor}$`, 'i'), 'colors.stock': { $gte: quantity } },
             { $inc: { 'colors.$.stock': -quantity } },
             { new: true }
           );
           if (!updatedProduct) {
-            return createErrorResponse(`Product ${item.name || productId} with color ${color} is out of stock`, 400);
+            return createErrorResponse(`Product "${item.name || productId}" with color "${color}" is out of stock or not found`, 400);
           }
         } else {
           const product = await Product.findById(productId);
           if (!product) {
-            return createErrorResponse(`Product ${item.name || productId} not found`, 400);
+            return createErrorResponse(`Product "${item.name || productId}" not found in database`, 400);
           }
         }
       }

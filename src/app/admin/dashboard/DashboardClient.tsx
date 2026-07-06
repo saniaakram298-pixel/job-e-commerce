@@ -1,15 +1,58 @@
-"use client";
-import React, { useMemo, useState } from 'react';
+'use client';
+
+import React, { useMemo, useState, Suspense } from 'react';
 import { useRouter } from 'next/navigation';
-import { useQuery } from '@tanstack/react-query';
+import dynamic from 'next/dynamic';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-    LayoutGrid, Package, Layers, Truck, Sun, Moon,
-    LogOut, ArrowUpRight, AlertCircle
+  LayoutGrid, Package, Layers, Truck, Sun, Moon,
+  LogOut, ArrowUpRight, AlertCircle, Bell, Search,
+  UserCircle2, ChevronDown, Home as HomeIcon, ExternalLink, X,
 } from 'lucide-react';
 import { useAuthStore } from '@/hooks/useAuth';
-import { Home, Collection as CollectionAdmin } from './Collections';
+import { api } from '@/lib/client';
+import { Home } from './Collections';
 import { Inventory } from './Inventory';
 import { Orders } from './Orders';
+import { AdminSidebar } from '@/components/admin/AdminSidebar';
+import { DashboardSkeleton, TabContentSkeleton } from '@/components/DashboardSkeleton';
+
+// DYNAMIC IMPORTS - Code splitting for instant dashboard load
+const AnalyticsDashboard = dynamic(() => import('./AnalyticsDashboard'), {
+  loading: () => <TabContentSkeleton />,
+});
+
+const ProductsLog = dynamic(() => import('@/components/admin/ProductsLog').then(mod => ({ default: mod.ProductsLog })), {
+  loading: () => <TabContentSkeleton />,
+});
+
+const ReviewsComponent = dynamic(() => import('@/components/admin/ReviewsComponent'), {
+  loading: () => <TabContentSkeleton />,
+});
+
+const ActivityLogComponent = dynamic(() => import('@/components/admin/ActivityLog'), {
+  loading: () => <TabContentSkeleton />,
+});
+
+const CategoryView = dynamic(() => import('@/components/admin/CategoryView'), {
+  loading: () => <TabContentSkeleton />,
+});
+
+const RevenueChart = dynamic(() => import('@/components/admin/RevenueChart'), {
+  loading: () => <div className="rounded-2xl border border-neutral-200 bg-white p-6 h-80 animate-pulse" />,
+});
+
+const RepeatedOrders = dynamic(() => import('@/components/admin/RepeatedOrdersSection'), {
+  loading: () => <div className="rounded-2xl border border-neutral-200 bg-white p-6 h-64 animate-pulse" />,
+});
+
+const BestSellers = dynamic(() => import('@/components/admin/BestSellersSection'), {
+  loading: () => <div className="rounded-2xl border border-neutral-200 bg-white p-6 h-80 animate-pulse" />,
+});
+
+const ReviewsOverview = dynamic(() => import('@/components/admin/ReviewsOverview'), {
+  loading: () => <div className="rounded-2xl border border-neutral-200 bg-white p-6 h-64 animate-pulse" />,
+});
 
 interface CollectionItem {
     _id: string;
@@ -25,6 +68,7 @@ interface CollectionItem {
 
 interface DashboardClientProps {
     collections: CollectionItem[];
+    total?: number;
     initialError?: string | null;
 }
 
@@ -62,19 +106,25 @@ async function fetchCollectionsFromApi(): Promise<{ collections: CollectionItem[
     }
 }
 
-export default function AtelierDashboardClient({ collections: initialCollections, initialError }: DashboardClientProps) {
+export default function AtelierDashboardClient({ collections: initialCollections, total: initialTotal, initialError }: DashboardClientProps) {
     const router = useRouter();
-    const { logout, user } = useAuthStore();
+    const { logout, user, token } = useAuthStore();
     const [activeTab, setActiveTab] = useState('overview');
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [darkMode, setDarkMode] = useState(false);
     const [manualRetryCount, setManualRetryCount] = useState(0);
+    const [showProfileMenu, setShowProfileMenu] = useState(false);
+    const [showNotificationDropdown, setShowNotificationDropdown] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [dismissedNotifications, setDismissedNotifications] = useState<Set<string>>(new Set());
+    const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+    const [showUploadForm, setShowUploadForm] = useState(false);
 
     const query = useQuery<{ collections: CollectionItem[]; total: number }, Error>({
         queryKey: ['admin-collections', manualRetryCount],
         queryFn: fetchCollectionsFromApi,
-        initialData: { collections: initialCollections, total: initialCollections?.length ?? 0 },
-        staleTime: 1000 * 60 * 2,
+        initialData: { collections: initialCollections, total: initialTotal ?? initialCollections?.length ?? 0 },
+        staleTime: 1000 * 30,
         refetchOnWindowFocus: false,
         refetchOnReconnect: false,
         refetchOnMount: false,
@@ -87,6 +137,54 @@ export default function AtelierDashboardClient({ collections: initialCollections
     const totalItems = query.data?.total ?? collections.length;
     const { error, isLoading, isFetching, refetch } = query;
 
+    const { data: orders = [] } = useQuery<any[], Error>({
+        queryKey: ['dashboard-orders'],
+        queryFn: async () => {
+            const response = await api.get<{ success?: boolean; data?: any[] } | any[]>('/orders', true);
+            if (Array.isArray(response)) return response;
+            return (response as any)?.data ?? [];
+        },
+        staleTime: 1000 * 30,
+        refetchOnWindowFocus: false,
+        retry: 2,
+        enabled: Boolean(token),
+    });
+
+    const queryClient = useQueryClient();
+
+    const { data: pendingOrders = [] } = useQuery<any[], Error>({
+        queryKey: ['dashboard-pending-orders'],
+        queryFn: async () => {
+            const response = await api.get<{ success: boolean; data: any[] }>('/admin/pending-orders', true);
+            if (Array.isArray(response)) return response;
+            return (response as any)?.data ?? [];
+        },
+        staleTime: 1000 * 30,
+        refetchOnWindowFocus: false,
+        enabled: Boolean(token),
+    });
+
+    const { data: adminCategories = [] } = useQuery<{ slug: string; name: string; productCount: number }[], Error>({
+        queryKey: ['admin-categories'],
+        queryFn: async () => {
+            const response = await fetch('/api/categories', { cache: 'no-store' });
+            if (!response.ok) {
+                throw new Error('Failed to load categories');
+            }
+            const data = await response.json();
+            return Array.isArray(data.categories)
+                ? data.categories.map((cat: any) => ({
+                      slug: String(cat.slug || cat.name || '').trim(),
+                      name: String(cat.name || cat.slug || '').trim(),
+                      productCount: Number(cat.productCount || 0),
+                  }))
+                : [];
+        },
+        staleTime: 1000 * 60 * 5,
+        refetchOnWindowFocus: false,
+        retry: 2,
+    });
+
     const serverError = error?.message ?? initialError ?? null;
     const isRetrying = isFetching && collections.length > 0;
     const isInitialLoad = isLoading && collections.length === 0;
@@ -98,80 +196,160 @@ export default function AtelierDashboardClient({ collections: initialCollections
     };
 
     const userName = user?.firstName || "Admin";
+    const userEmail = user?.email || 'admin@theatelier.com';
+    const normalizedSearch = searchQuery.trim().toLowerCase();
+    
+    // Sidebar menu items for search
+    const sidebarItems = [
+        { id: 'overview', label: 'Overview', icon: <LayoutGrid className="w-4 h-4" /> },
+        { id: 'home', label: 'Home', icon: <Layers className="w-4 h-4" /> },
+        { id: 'products', label: 'Products Log', icon: <Package className="w-4 h-4" /> },
+        { id: 'orders', label: 'Orders', icon: <Truck className="w-4 h-4" /> },
+        { id: 'inventory', label: 'Inventory', icon: <Package className="w-4 h-4" /> },
+    ];
+    
+    const searchResults = useMemo(() => {
+        if (!normalizedSearch) return [];
+
+        const matchedCollections = (collections || []).filter((item: CollectionItem) =>
+            [item.title, item.tag, item.category, item.description].some((value) =>
+                value?.toString().toLowerCase().includes(normalizedSearch)
+            )
+        );
+
+        const matchedOrders = (orders || []).filter((order: any) =>
+            [order.orderNumber, order.customerName, order.customerEmail].some((value) =>
+                value?.toString().toLowerCase().includes(normalizedSearch)
+            )
+        );
+
+        const matchedSidebar = sidebarItems.filter((item) =>
+            item.label.toLowerCase().includes(normalizedSearch)
+        );
+
+        const matchesAdmin = [userName, userEmail].some((value) => value?.toLowerCase().includes(normalizedSearch));
+
+        return [
+            ...matchedSidebar.slice(0, 2).map((item) => ({
+                type: 'Sidebar',
+                label: item.label,
+                detail: `Navigate to ${item.label}`,
+                action: () => setActiveTab(item.id),
+            })),
+            ...matchedCollections.slice(0, 3).map((item: CollectionItem) => ({
+                type: 'Component',
+                label: item.title,
+                detail: `${item.category || 'Collection'} • ${item.tag || 'Featured'}`,
+            })),
+            ...matchedOrders.slice(0, 3).map((order: any) => ({
+                type: 'Order',
+                label: order.customerName || `Order #${order.orderNumber || order._id}`,
+                detail: order.customerEmail || 'Customer contact unavailable',
+            })),
+            ...(matchesAdmin ? [{ type: 'Admin', label: userName, detail: userEmail }] : []),
+        ];
+    }, [collections, orders, normalizedSearch, userEmail, userName]);
 
     const handleLogout = () => {
         logout();
-        router.push('/login');
+        window.location.href = '/login';
     };
+
+    const handleCategorySelect = (categoryName: string) => {
+        setSelectedCategory(categoryName);
+        setActiveTab('category');
+    };
+
+    const handleNotificationClick = (orderId: string, orderStatus: string) => {
+        // Add to dismissed notifications
+        const newDismissed = new Set(dismissedNotifications);
+        newDismissed.add(orderId);
+        setDismissedNotifications(newDismissed);
+        
+        // Navigate to orders tab
+        setActiveTab('orders');
+        setShowNotificationDropdown(false);
+    };
+
+    const getNotifications = () => {
+        const pendingOrders = (orders || [])
+            .filter((order: any) => ['pending', 'processing'].includes(order.orderStatus))
+            .filter((order: any) => !dismissedNotifications.has(order._id));
+        
+        const followUps = (Array.isArray(pendingOrders) ? pendingOrders : [])
+            .filter((order: any) => !dismissedNotifications.has(order._id));
+        
+        return [...pendingOrders, ...followUps].slice(0, 5);
+    };
+
+    const notifications = getNotifications();
 
     const stats = useMemo(() => {
         const safeCollections = Array.isArray(collections) ? collections : [];
         const totalStock = safeCollections.reduce((acc: number, curr: CollectionItem) => acc + (curr.stock || 0), 0);
         const totalValue = safeCollections.reduce((acc: number, curr: CollectionItem) => acc + (curr.price || 0), 0);
+        const totalOrders = Array.isArray(orders) ? orders.length : 0;
+        const totalRevenue = Array.isArray(orders)
+            ? orders.reduce((acc: number, curr: any) => acc + Number(curr.totalPrice || 0), 0)
+            : 0;
+        const totalFollowUps = Array.isArray(pendingOrders) ? pendingOrders.length : 0;
         return {
             totalItems,
             stock: totalStock,
             value: totalValue.toLocaleString(),
-            lowStock: safeCollections.filter((c: CollectionItem) => c.stock < 5).length
+            lowStock: safeCollections.filter((c: CollectionItem) => c.stock < 5).length,
+            totalOrders,
+            totalRevenue: totalRevenue.toLocaleString(),
+            totalFollowUps,
         };
-    }, [collections, totalItems]);
+    }, [collections, orders, pendingOrders, totalItems]);
+
+    const notificationCount = useMemo(() => {
+        const pendingOrderCount = (orders || []).filter((order: any) => ['pending', 'processing'].includes(order.orderStatus)).length;
+        return pendingOrderCount + (Array.isArray(pendingOrders) ? pendingOrders.length : 0);
+    }, [orders, pendingOrders]);
+
+    const overviewCards = [
+        {
+            label: 'Total Collections',
+            value: stats.totalItems.toString(),
+            icon: <Layers size={16} />,
+            onClick: () => setActiveTab('home'),
+        },
+        {
+            label: 'Total Orders',
+            value: stats.totalOrders.toString(),
+            icon: <Truck size={16} />,
+            onClick: () => setActiveTab('orders'),
+        },
+        {
+            label: 'Total Revenue',
+            value: `$${stats.totalRevenue}`,
+            icon: <ArrowUpRight size={16} />,
+            onClick: () => setActiveTab('orders'),
+        },
+        {
+            label: 'Total Follow-ups',
+            value: stats.totalFollowUps.toString(),
+            icon: <AlertCircle size={16} className="text-red-500" />,
+            onClick: () => setActiveTab('orders'),
+        },
+    ];
 
     const toggleTheme = () => setDarkMode(!darkMode);
 
     return (
         <div className={`flex h-screen font-sans transition-colors duration-500 ${darkMode ? 'bg-[#0A0A0A] text-gray-200' : 'bg-[#F9F9F9] text-gray-900'}`}>
-            <aside className={`fixed inset-y-0 left-0 z-40 w-64 ${darkMode ? 'bg-[#0F0F0F] border-neutral-900' : 'bg-white border-neutral-200'} border-r transform transition-transform duration-300 lg:relative lg:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} flex flex-col justify-between py-6 px-4`}>
-                <div className="space-y-8">
-                    <div className="space-y-3">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="text-sm font-bold uppercase tracking-[0.3em]">Atelier</p>
-                                <h2 className="text-xl font-black">Admin</h2>
-                            </div>
-                            <button onClick={() => setIsSidebarOpen(false)} className="text-neutral-500 hover:text-[#E5A93A]">X</button>
-                        </div>
-                    </div>
-                    <nav className="space-y-1">
-                        {[
-                            { id: 'overview', label: 'Overview', icon: <LayoutGrid className="w-4 h-4" /> },
-                            { id: 'home', label: 'Home', icon: <Layers className="w-4 h-4" /> },
-                            { id: 'orders', label: 'Orders', icon: <Truck className="w-4 h-4" /> },
-                            { id: 'inventory', label: 'Inventory', icon: <Package className="w-4 h-4" /> },
-                        ].map((tab) => (
-                            <button
-                                key={tab.id}
-                                onClick={() => setActiveTab(tab.id)}
-                                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all ${activeTab === tab.id ? (darkMode ? 'bg-[#141414] text-[#E5A93A] border border-neutral-800' : 'bg-[#E5A93A]/10 text-[#8C6219] border border-[#E5A93A]/20') : 'text-neutral-500 hover:text-[#E5A93A]'}`}
-                            >
-                                {tab.icon}
-                                <span className="text-sm font-medium">{tab.label}</span>
-                            </button>
-                        ))}
-                    </nav>
-                </div>
-
-                <div className="space-y-4">
-                    <button
-                        onClick={toggleTheme}
-                        className="w-full rounded-xl border border-neutral-800 px-4 py-3 text-sm font-bold uppercase tracking-[0.2em] transition hover:border-[#E5A93A]"
-                    >
-                        {darkMode ? <Sun className="inline-block w-4 h-4 mr-2" /> : <Moon className="inline-block w-4 h-4 mr-2" />}
-                        {darkMode ? 'Light Mode' : 'Dark Mode'}
-                    </button>
-                    <div className="rounded-2xl border border-neutral-800 p-4 bg-opacity-80 bg-white/5">
-                        <p className="text-xs uppercase tracking-[0.3em] text-neutral-500">Welcome back</p>
-                        <h3 className="mt-2 text-lg font-black">{userName}</h3>
-                        <p className="text-sm text-neutral-400">Manage collections, orders and inventory.</p>
-                    </div>
-                    <button
-                        onClick={handleLogout}
-                        className="w-full rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm font-bold uppercase tracking-[0.2em] text-red-600 transition hover:bg-red-500/20 hover:border-red-500/50 flex items-center justify-center gap-2"
-                    >
-                        <LogOut className="w-4 h-4" />
-                        Logout
-                    </button>
-                </div>
-            </aside>
+            <AdminSidebar
+                activeTab={activeTab}
+                onTabChange={setActiveTab}
+                onCategorySelect={handleCategorySelect}
+                categories={adminCategories.map((category) => ({ id: category.slug, label: category.name }))}
+                isSidebarOpen={isSidebarOpen}
+                onClose={() => setIsSidebarOpen(false)}
+                darkMode={darkMode}
+                onLogout={handleLogout}
+            />
 
             <main className="flex-1 overflow-y-auto p-4 md:p-8 lg:p-12">
                 {isInitialLoad && (
@@ -203,48 +381,281 @@ export default function AtelierDashboardClient({ collections: initialCollections
                 
                 {activeTab === 'overview' && (
                     <div className="animate-in fade-in duration-700 space-y-8">
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-                            <StatCard darkMode={darkMode} label="Total Collections" value={stats.totalItems.toString()} icon={<Layers size={16} />} />
-                            <StatCard darkMode={darkMode} label="Total Stock" value={stats.stock.toString()} icon={<Package size={16} />} />
-                            <StatCard darkMode={darkMode} label="Revenue Potential" value={`$${stats.value}`} icon={<ArrowUpRight size={16} />} />
-                            <StatCard darkMode={darkMode} label="Inventory Alerts" value={stats.lowStock.toString()} icon={<AlertCircle size={16} className="text-red-500" />} />
+                        {/* Welcome Card */}
+                        <div className={`rounded-2xl border ${darkMode ? 'border-neutral-800 bg-[#0F0F0F]' : 'border-neutral-200 bg-white'} p-4 mb-6`}>
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="text-xs uppercase tracking-[0.3em] text-neutral-500">Welcome back</p>
+                                    <h3 className="mt-2 text-lg font-black">{userName}</h3>
+                                    <p className="text-sm text-neutral-400">Manage collections, orders and inventory.</p>
+                                </div>
+                                <button
+                                    onClick={() => router.push('/')}
+                                    className={`flex items-center gap-2 px-4 py-2 rounded-xl transition ${darkMode ? 'bg-[#E5A93A]/10 text-[#E5A93A] hover:bg-[#E5A93A]/20' : 'bg-[#E5A93A]/10 text-[#8C6219] hover:bg-[#E5A93A]/20'}`}
+                                >
+                                    <ExternalLink className="w-4 h-4" />
+                                    Visit Site
+                                </button>
+                            </div>
                         </div>
+
+                        <div className="mb-6 flex flex-col gap-4 rounded-3xl border border-neutral-200/80 bg-white/80 p-4 shadow-sm backdrop-blur md:flex-row md:items-center md:justify-between">
+                            <div className="flex-1">
+                                <label htmlFor="dashboard-search" className="sr-only">Search dashboard</label>
+                                <div className="relative">
+                                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
+                                    <input
+                                        id="dashboard-search"
+                                        type="search"
+                                        value={searchQuery}
+                                        onChange={(event) => setSearchQuery(event.target.value)}
+                                        placeholder="Search components, orders, clients, admin"
+                                        className={`w-full rounded-2xl border bg-transparent py-3 pl-10 pr-4 text-sm outline-none transition ${darkMode ? 'border-neutral-800 text-gray-200 placeholder:text-neutral-500' : 'border-neutral-200 text-gray-900 placeholder:text-neutral-400'}`}
+                                    />
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-3">
+                                {/* Visit Site Button */}
+                                <button
+                                    type="button"
+                                    onClick={() => router.push('/')}
+                                    className={`flex items-center gap-2 px-3 py-2 rounded-full border transition ${darkMode ? 'border-neutral-800 text-gray-200 hover:border-[#E5A93A]' : 'border-neutral-200 text-gray-700 hover:border-[#E5A93A]'}`}
+                                    title="Visit Site"
+                                >
+                                    <ExternalLink className="h-4 w-4" />
+                                </button>
+                                
+                                {/* Notification Dropdown */}
+                                <div className="relative">
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowNotificationDropdown(!showNotificationDropdown)}
+                                        className={`relative rounded-full border p-2.5 transition ${darkMode ? 'border-neutral-800 text-gray-200 hover:border-[#E5A93A]' : 'border-neutral-200 text-gray-700 hover:border-[#E5A93A]'}`}
+                                    >
+                                        <Bell className="h-4 w-4" />
+                                        {notificationCount > 0 && (
+                                            <span className="absolute -right-1 -top-1 inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-red-500 px-1.5 text-[10px] font-semibold text-white">
+                                                {notificationCount}
+                                            </span>
+                                        )}
+                                    </button>
+                                    
+                                    {/* Notification Dropdown Menu */}
+                                    {showNotificationDropdown && (
+                                        <div className={`absolute right-0 z-10 mt-2 w-80 rounded-2xl border p-3 shadow-lg ${darkMode ? 'border-neutral-800 bg-[#111111]' : 'border-neutral-200 bg-white'}`}>
+                                            <div className="flex items-center justify-between mb-3">
+                                                <p className="text-sm font-semibold">Notifications</p>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setShowNotificationDropdown(false)}
+                                                    className="text-neutral-500 hover:text-neutral-700"
+                                                >
+                                                    <X className="h-4 w-4" />
+                                                </button>
+                                            </div>
+                                            {notifications.length > 0 ? (
+                                                <div className="space-y-2 max-h-80 overflow-y-auto">
+                                                    {notifications.map((notification: any) => (
+                                                        <button
+                                                            key={notification._id}
+                                                            type="button"
+                                                            onClick={() => handleNotificationClick(notification._id, notification.orderStatus)}
+                                                            className={`w-full text-left flex items-start justify-between rounded-lg border px-3 py-2 transition ${darkMode ? 'border-neutral-800 bg-black/20 hover:border-[#E5A93A]/50' : 'border-neutral-200 bg-neutral-50 hover:border-[#E5A93A]'}`}
+                                                        >
+                                                            <div className="flex-1 min-w-0">
+                                                                <p className="text-sm font-semibold truncate">{notification.customerName || 'Customer Order'}</p>
+                                                                <p className="text-xs text-neutral-500">Order #{notification.orderNumber || notification._id?.toString()?.slice(-6)}</p>
+                                                                <p className="text-[10px] text-neutral-400 uppercase mt-1">{notification.orderStatus}</p>
+                                                            </div>
+                                                            <span className="rounded-full bg-[#E5A93A]/10 px-2 py-1 text-[9px] font-semibold uppercase text-[#8C6219] ml-2 whitespace-nowrap">
+                                                                {notification.orderStatus === 'pending' ? 'Pending' : 'Processing'}
+                                                            </span>
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            ) : (
+                                                <p className="text-sm text-neutral-500 py-4 text-center">No notifications</p>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                                
+                                {/* Theme Toggle */}
+                                <button
+                                    type="button"
+                                    onClick={() => setDarkMode(!darkMode)}
+                                    className={`rounded-full border p-2.5 transition ${darkMode ? 'border-neutral-800 text-gray-200 hover:border-[#E5A93A]' : 'border-neutral-200 text-gray-700 hover:border-[#E5A93A]'}`}
+                                    title={darkMode ? 'Light Mode' : 'Dark Mode'}
+                                >
+                                    {darkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+                                </button>
+                                
+                                <div className="relative">
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowProfileMenu((prev) => !prev)}
+                                        className={`flex items-center gap-2 rounded-full border px-3 py-2 transition ${darkMode ? 'border-neutral-800 text-gray-200 hover:border-[#E5A93A]' : 'border-neutral-200 text-gray-700 hover:border-[#E5A93A]'}`}
+                                    >
+                                        <UserCircle2 className="h-5 w-5" />
+                                        <span className="text-sm font-semibold">{userName}</span>
+                                        <ChevronDown className="h-4 w-4" />
+                                    </button>
+                                    {showProfileMenu && (
+                                        <div className={`absolute right-0 z-10 mt-2 w-64 rounded-2xl border p-3 shadow-lg ${darkMode ? 'border-neutral-800 bg-[#111111]' : 'border-neutral-200 bg-white'}`}>
+                                            <div className="border-b border-neutral-200/70 pb-3 dark:border-neutral-800">
+                                                <p className="text-sm font-semibold">{userName}</p>
+                                                <p className="text-xs text-neutral-500">{userEmail}</p>
+                                            </div>
+                                            <div className="mt-2 space-y-1">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setShowProfileMenu(false);
+                                                        router.push('/');
+                                                    }}
+                                                    className={`flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm transition ${darkMode ? 'text-gray-200 hover:bg-neutral-900' : 'text-gray-700 hover:bg-neutral-100'}`}
+                                                >
+                                                    <HomeIcon className="h-4 w-4" />
+                                                    Home
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setShowProfileMenu(false);
+                                                        handleLogout();
+                                                    }}
+                                                    className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm text-red-600 transition hover:bg-red-500/10"
+                                                >
+                                                    <LogOut className="h-4 w-4" />
+                                                    Logout
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+
+                        {normalizedSearch && (
+                            <div className={`rounded-3xl border p-4 ${darkMode ? 'border-neutral-800 bg-[#111111]' : 'border-neutral-200 bg-white'}`}>
+                                <div className="flex items-center justify-between">
+                                    <p className="text-sm font-semibold">Search results</p>
+                                    <span className="text-xs uppercase tracking-[0.2em] text-neutral-500">{searchResults.length} found</span>
+                                </div>
+                                {searchResults.length > 0 ? (
+                                    <div className="mt-4 space-y-2">
+                                        {searchResults.map((result: any, index) => (
+                                            <button
+                                                key={`${result.type}-${index}`}
+                                                onClick={result.action}
+                                                type="button"
+                                                className={`w-full flex items-start justify-between rounded-2xl border px-3 py-2 text-left transition ${darkMode ? 'border-neutral-800 bg-black/20 hover:border-[#E5A93A]/50' : 'border-neutral-200 bg-neutral-50 hover:border-[#E5A93A]'}`}
+                                            >
+                                                <div>
+                                                    <p className="text-sm font-semibold">{result.label}</p>
+                                                    <p className="text-xs text-neutral-500">{result.detail}</p>
+                                                </div>
+                                                <span className="rounded-full bg-[#E5A93A]/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-[#8C6219]">
+                                                    {result.type}
+                                                </span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <p className="mt-4 text-sm text-neutral-500">No matches found across sidebar, components, orders, or admin details.</p>
+                                )}
+                            </div>
+                        )}
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                            {overviewCards.map((card) => (
+                                <StatCard
+                                    key={card.label}
+                                    darkMode={darkMode}
+                                    label={card.label}
+                                    value={card.value}
+                                    icon={card.icon}
+                                    onClick={card.onClick}
+                                />
+                            ))}
+                        </div>
+
+                        {/* Revenue Chart */}
+                        <RevenueChart darkMode={darkMode} />
+
+                        {/* Repeated Orders and Reviews Grid */}
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                            <RepeatedOrders darkMode={darkMode} />
+                            <ReviewsOverview darkMode={darkMode} />
+                        </div>
+
+                        {/* Best Sellers */}
+                        <BestSellers darkMode={darkMode} />
                     </div>
                 )}
 
                 {activeTab === 'home' && (
-                    <div className="space-y-10">
-                        <Home 
-                            collections={collections} 
-                            totalItems={totalItems}
-                            onUpdate={() => refetch().then(() => {})}
-                            isLoading={isFetching}
-                        />
-                        <CollectionAdmin 
-                            collections={collections} 
-                            totalItems={totalItems}
-                            onUpdate={() => refetch().then(() => {})} 
-                            isLoading={isFetching}
+                    <div className="space-y-8">
+                        {/* Analytics Dashboard - Above Categories */}
+                        <AnalyticsDashboard
+                            onCategorySelect={handleCategorySelect}
+                            onCategoryCreated={() => queryClient.invalidateQueries({ predicate: (query) => query.queryKey[0] === 'admin-categories' })}
                         />
                     </div>
                 )}
                 {activeTab === 'orders' && <Orders />}
                 {activeTab === 'inventory' && <Inventory />}
+                {activeTab === 'products' && (
+                    <div className="space-y-8 animate-in fade-in duration-700">
+                        <ProductsLog
+                            darkMode={darkMode}
+                            categoryFilter={selectedCategory || undefined}
+                            onRefresh={() => {
+                                setManualRetryCount((prev) => prev + 1);
+                                refetch();
+                            }}
+                        />
+                    </div>
+                )}
+                {activeTab === 'reviews' && (
+                    <div className="space-y-8 animate-in fade-in duration-700">
+                        <ReviewsComponent darkMode={darkMode} />
+                    </div>
+                )}
+                {activeTab === 'activity' && (
+                    <div className="space-y-8 animate-in fade-in duration-700">
+                        <ActivityLogComponent darkMode={darkMode} />
+                    </div>
+                )}
+
+                {activeTab === 'category' && selectedCategory && (
+                    <div className="animate-in fade-in duration-700">
+                        <CategoryView
+                            categoryName={selectedCategory}
+                            onBack={() => setActiveTab('overview')}
+                            darkMode={darkMode}
+                        />
+                    </div>
+                )}
             </main>
         </div>
     );
 }
 
-function StatCard({ label, value, trend, icon, darkMode }: { label: string, value: string, trend?: string, icon: React.ReactNode, darkMode: boolean }) {
+function StatCard({ label, value, trend, icon, darkMode, onClick }: { label: string, value: string, trend?: string, icon: React.ReactNode, darkMode: boolean, onClick?: () => void }) {
     return (
-        <div className={`p-6 rounded-xl border transition-all group ${darkMode ? 'bg-[#0F0F0F] border-neutral-900 hover:border-[#E5A93A]/50' : 'bg-white border-neutral-200 hover:border-[#E5A93A] shadow-sm'}`}>
+        <button
+            type="button"
+            onClick={onClick}
+            className={`w-full p-6 rounded-xl border transition-all group text-left ${darkMode ? 'bg-[#0F0F0F] border-neutral-900 hover:border-[#E5A93A]/50' : 'bg-white border-neutral-200 hover:border-[#E5A93A] shadow-sm'} ${onClick ? 'cursor-pointer' : 'cursor-default'}`}
+        >
             <div className="flex justify-between items-start mb-4">
                 <p className="text-[10px] text-neutral-500 tracking-widest uppercase">{label}</p>
                 <div className={`${darkMode ? 'text-neutral-700 group-hover:text-[#E5A93A]' : 'text-neutral-300 group-hover:text-[#E5A93A]'} transition-colors`}>{icon}</div>
             </div>
             <h3 className={`text-2xl font-semibold tracking-tight ${darkMode ? 'text-white' : 'text-black'}`}>{value}</h3>
             {trend && <p className="text-[10px] text-[#E5A93A] mt-2 font-bold uppercase">{trend}</p>}
-        </div>
+        </button>
     );
 }
 function setManualRetryCount(arg0: (prev: any) => any) {

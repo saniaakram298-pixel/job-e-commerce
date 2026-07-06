@@ -12,6 +12,8 @@ export default function AdminProducts() {
             { label: 'Products', href: '/admin/products', icon: 'inventory_2', active: true },
             { label: 'Orders', href: '/admin/orders', icon: 'shopping_cart', active: false },
             { label: 'Customers', href: '/admin/customers', icon: 'group', active: false },
+            { label: 'Reviews', href: '/admin/reviews', icon: 'rate_review', active: false },
+            { label: 'Subscribers', href: '/admin/subscribers', icon: 'mail', active: false },
             { label: 'Analytics', href: '/admin/analytics', icon: 'analytics', active: false },
             { label: 'Settings', href: '/admin/settings', icon: 'settings', active: false },
           ].map((item) => (

@@ -3,6 +3,8 @@
 import Link from 'next/link';
 import { Arrival } from '@/types';
 import { useCart } from '@/context/CartContext';
+import { useState } from 'react';
+import QuickView from './QuickView';
 
 interface ProductCardClientProps {
     product: Arrival;
@@ -10,6 +12,7 @@ interface ProductCardClientProps {
 
 export default function ProductCardClient({ product }: ProductCardClientProps) {
     const { addToCart } = useCart();
+    const [quick, setQuick] = useState<any>(null);
 
     return (
         <div className="min-w-[280px] md:min-w-[320px] lg:min-w-[350px] group snap-start">
@@ -26,12 +29,23 @@ export default function ProductCardClient({ product }: ProductCardClientProps) {
                     className="w-full h-full object-cover group-hover:scale-105 transition duration-700"
                 />
 
-                <div className="absolute inset-0 bg-black/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500 flex items-end p-6">
+                <div className="absolute inset-0 bg-black/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500 flex items-end p-6 space-x-3">
                     <button
-                        onClick={() => addToCart(product)}
-                        className="w-full bg-black text-white py-3 text-[10px] uppercase tracking-widest translate-y-4 group-hover:translate-y-0 transition-transform duration-500 hover:bg-stone-800"
+  type="button"
+  onClick={(event) => {
+    event.stopPropagation();
+    addToCart(product);
+  }}
+  className="w-full bg-black text-white py-3 text-[10px] uppercase tracking-widest translate-y-0 sm:translate-y-4 sm:group-hover:translate-y-0 transition-transform duration-500 hover:bg-stone-800"
+>
+  Quick Add
+</button>
+                    <button
+                        onClick={() => setQuick(product)}
+                        className="absolute top-4 right-4 bg-white/95 text-black px-3 py-2 text-[11px] rounded opacity-0 group-hover:opacity-100 transition"
+                        aria-label="Quick view"
                     >
-                        Quick Add
+                        Quick View
                     </button>
                 </div>
             </div>
@@ -55,6 +69,8 @@ export default function ProductCardClient({ product }: ProductCardClientProps) {
                     </Link>
                 </div>
             </div>
+
+            {quick && <QuickView product={quick} onClose={() => setQuick(null)} />}
         </div>
     );
 }
