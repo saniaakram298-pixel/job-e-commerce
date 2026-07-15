@@ -16,11 +16,10 @@ export default function LoginPage() {
 
   // Redirect to dashboard if already logged in
   useEffect(() => {
-    if (user && !isRedirecting) {
-      setIsRedirecting(true);
-      router.prefetch('/admin/dashboard');
-      router.push('/admin/dashboard');
-    }
+   if (user && !isRedirecting) {
+  setIsRedirecting(true);
+  router.push('/admin/dashboard');
+}
   }, [user, router, isRedirecting]);
 
   const handleLogin = async (e: { preventDefault: () => void }) => {

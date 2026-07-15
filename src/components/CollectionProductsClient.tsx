@@ -47,6 +47,9 @@ export default function CollectionProductsClient({
   const sentinelRef = useRef<HTMLDivElement | null>(null);
   const observerRef = useRef<IntersectionObserver | null>(null);
   const isFetchingRef = useRef(false);
+  const gridRef = useRef<HTMLDivElement | null>(null);
+  const firstCardRef = useRef<HTMLDivElement | null>(null);
+  const [nextFetchSize, setNextFetchSize] = useState<number>(batchSize);
 
   // Calculate remaining skeleton placeholders
   const reservedCount = Math.max(0, totalProducts - loadedProducts.length);
@@ -64,7 +67,7 @@ export default function CollectionProductsClient({
   /**
    * Fetch more products - runs in background without blocking UI
    */
-  const fetchMoreProducts = useCallback(async () => {
+  const fetchMoreProducts = useCallback(async (requestedLimit?: number) => {
     if (loadingMore || !hasMoreProducts || isFetchingRef.current) {
       return;
     }
@@ -73,8 +76,10 @@ export default function CollectionProductsClient({
     setLoadingMore(true);
 
     try {
+      const offset = loadedProducts.length;
+      const limitToUse = Number.isFinite(Number(requestedLimit)) && requestedLimit! > 0 ? requestedLimit! : batchSize;
       const response = await fetch(
-        `/api/products?category=${encodeURIComponent(categorySlug)}&page=${page + 1}&limit=${batchSize}`,
+        `/api/products?category=${encodeURIComponent(categorySlug)}&categorySlug=${encodeURIComponent(categorySlug)}&offset=${offset}&limit=${limitToUse}`,
         { cache: 'no-store' }
       );
 
@@ -96,7 +101,8 @@ export default function CollectionProductsClient({
       if (nextProducts.length > 0) {
         const updatedProducts = [...loadedProducts, ...nextProducts];
         setLoadedProducts(updatedProducts);
-        setPage((prev) => prev + 1);
+        // Page state is kept for compatibility but we primarily use offset-based requests now
+        setPage(Math.floor(updatedProducts.length / Math.max(1, batchSize)));
         setHasMoreProducts(updatedProducts.length < totalProducts);
       } else {
         setHasMoreProducts(false);
@@ -127,7 +133,26 @@ export default function CollectionProductsClient({
       (entries) => {
         const [entry] = entries;
         if (entry?.isIntersecting && !loadingMore && !isFetchingRef.current) {
-          void fetchMoreProducts();
+          // Compute how many items we should request to fill the viewport
+          try {
+            const gridEl = gridRef.current;
+            const firstCardEl = firstCardRef.current;
+            const gridRect = gridEl?.getBoundingClientRect();
+            const cardHeight = firstCardEl?.offsetHeight || 360;
+            const cardWidth = firstCardEl?.offsetWidth || (gridRect?.width || 1);
+            const containerWidth = gridRect?.width || window.innerWidth;
+            const columns = Math.max(1, Math.floor(containerWidth / Math.max(1, cardWidth)));
+            const gridTop = gridRect ? Math.max(0, gridRect.top) : 0;
+            const visibleHeight = Math.max(0, window.innerHeight - gridTop);
+            const visibleRows = Math.max(1, Math.ceil(visibleHeight / Math.max(1, cardHeight)) + 1);
+            const itemsNeeded = columns * visibleRows;
+            const remaining = Math.max(0, totalProducts - loadedProducts.length);
+            const toFetch = Math.min(Math.max(batchSize, itemsNeeded), remaining);
+            setNextFetchSize(toFetch);
+            void fetchMoreProducts(toFetch);
+          } catch (e) {
+            void fetchMoreProducts();
+          }
         }
       },
       { rootMargin: '220px 0px', threshold: 0.01 }
@@ -167,11 +192,12 @@ export default function CollectionProductsClient({
       </div>
 
       {/* Product Grid with Skeletons */}
-      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+      <div ref={gridRef} className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
         {/* Loaded products */}
-        {loadedProducts.map((product) => (
+        {loadedProducts.map((product, idx) => (
           <div
             key={product.id}
+            ref={idx === 0 ? firstCardRef : undefined}
             className="group overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-sm transition hover:-translate-y-1 hover:shadow-md"
           >
             <Link href={`/product/${product.id}`} className="block">
@@ -203,7 +229,7 @@ export default function CollectionProductsClient({
         ))}
 
         {/* Skeleton placeholders for remaining products */}
-        {reservedCount > 0 && <ProductSkeletonGrid count={Math.min(reservedCount, batchSize)} columns={3} />}
+        {reservedCount > 0 && <ProductSkeletonGrid count={Math.min(reservedCount, Math.max(batchSize, nextFetchSize))} columns={3} />}
       </div>
 
       {/* Infinite scroll sentinel */}

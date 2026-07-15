@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { Search, Eye, Trash2, ArrowRight } from 'lucide-react';
+import { getTotalStock } from '@/lib/productStock';
 
 interface Product {
   _id: string;
@@ -46,17 +47,7 @@ export const ProductsLog: React.FC<ProductsLogProps> = ({ darkMode = false, onRe
     'accessories',
   ];
 
-  const calculateTotalStock = (product: Product): number => {
-    if (product.stock !== undefined) return product.stock;
-    let total = 0;
-    if (Array.isArray(product.sizes)) {
-      total += product.sizes.reduce((sum, s) => sum + (s.stock || 0), 0);
-    }
-    if (Array.isArray(product.colors)) {
-      total += product.colors.reduce((sum, c) => sum + (c.stock || 0), 0);
-    }
-    return total;
-  };
+  const calculateTotalStock = (product: Product): number => getTotalStock(product);
 
   const loadProducts = async () => {
     setLoading(true);

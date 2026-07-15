@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { connectDB } from '@/lib/mongodb';
 import { Product } from '@/models/Product';
 import { createErrorResponse, createSuccessResponse } from '@/lib/response';
+import { getTotalStock } from '@/lib/productStock';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,7 +18,7 @@ export async function GET(request: NextRequest) {
     const collection = searchParams.get('collection');
     const search = searchParams.get('search');
 
-    const query: Record<string, unknown> = { active: true, isBestSeller: true };
+    const query: Record<string, unknown> = { active: true };
     if (category) query.category = category;
     if (collection) query.collection = collection;
     if (search) {
@@ -30,7 +31,16 @@ export async function GET(request: NextRequest) {
       ];
     }
 
-    const products = await Product.find(query)
+    const fallbackQuery = {
+      ...query,
+      $or: [
+        { isBestSeller: true },
+        { featured: true },
+        { collection: { $regex: /best|seller/i } },
+      ],
+    };
+
+    const products = await Product.find(fallbackQuery)
       .select('name description price discountPrice images img category collection stock sizes colors featured isBestSeller isTrending active createdAt updatedAt')
       .skip(Math.max(0, offset))
       .limit(limit)
@@ -49,7 +59,7 @@ export async function GET(request: NextRequest) {
       images: Array.isArray(product.images) ? product.images : [],
       category: product.category || '',
       collection: product.collection || '',
-      stock: Number(product.stock ?? 0),
+      stock: getTotalStock(product),
       sizes: Array.isArray(product.sizes)
         ? product.sizes.map((size: any) => ({ size: size.size, stock: size.stock }))
         : [],

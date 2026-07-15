@@ -166,6 +166,29 @@ export default function AtelierDashboardClient({
     retry: 2,
     enabled: Boolean(token),
   });
+  const { data: adminStats } = useQuery<{
+  totalRevenue: number;
+  totalOrders: number;
+  totalProducts: number;
+  totalCustomers: number;
+}>({
+  queryKey: ['admin-stats'],
+  queryFn: async () => {
+    const res = await fetch('/api/admin/stats', {
+      cache: 'no-store',
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    if (!res.ok) throw new Error('Failed to fetch stats');
+
+    const data = await res.json();
+    return data.data;
+  },
+  enabled: Boolean(token),
+  staleTime: 1000 * 30,
+});
 
   // OPTIMIZED: Pending Orders Query - Lazy loaded in background
   const { data: pendingOrders = [] } = useQuery<any[], Error>({

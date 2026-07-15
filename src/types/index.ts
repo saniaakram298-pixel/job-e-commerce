@@ -20,7 +20,8 @@ export interface Product {
   }>;
   img?: string;
   rating: number;
-  reviews: string[];
+  averageRating?: number;
+  totalReviews?: number;
   careInstructions?: string;
   fit?: string;
   featured: boolean;
@@ -78,6 +79,12 @@ export interface Order {
   orderStatus: 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
   trackingNumber?: string;
   notes?: string;
+  deliveredAt?: string;
+  returnStatus?: 'none' | 'pending' | 'approved' | 'rejected';
+  returnRequestedAt?: string;
+  returnApprovedAt?: string;
+  returnRejectedAt?: string;
+  returnNotes?: string;
   followUpNotes?: Array<{
     message: string;
     timestamp: string;
@@ -87,7 +94,7 @@ export interface Order {
   updatedAt: string;
 }
 
-export type ReturnStatus = 'pending' | 'verified' | 'approved' | 'rejected' | 'completed';
+export type ReturnStatus = 'pending' | 'approved' | 'rejected';
 
 export interface ReturnHistoryItem {
   status: ReturnStatus;
@@ -97,6 +104,7 @@ export interface ReturnHistoryItem {
 
 export interface ReturnRequest {
   _id: string;
+  userId?: string;
   orderId: string | {
     _id: string;
     orderNumber: number;
@@ -105,10 +113,17 @@ export interface ReturnRequest {
     customerEmail?: string;
     totalPrice?: number;
   };
-  customerEmail: string;
+  productId?: string;
+  customerName?: string;
+  email?: string;
+  customerEmail?: string;
   reason: string;
+  description?: string;
   details?: string;
+  images?: string[];
+  video?: string;
   status: ReturnStatus;
+  adminMessage?: string;
   history: ReturnHistoryItem[];
   createdAt: string;
   updatedAt: string;
@@ -126,17 +141,22 @@ export interface Review {
   _id: string;
   productId: string;
   userId: string;
+  orderId?: string;
+  userName: string;
+  userEmail?: string;
   rating: number;
-  title: string;
   comment: string;
-  verified: boolean;
-  helpful: number;
+  images?: string[];
+  status: 'pending' | 'approved' | 'rejected' | 'cancelled';
+  adminResponse?: string;
   createdAt: string;
   updatedAt: string;
 }
 
 // Homepage Component Types
 export interface Arrival {
+  updatedAt: any;
+  createdAt: any;
   id: string;
   name: string;
   img: string;
@@ -147,6 +167,9 @@ export interface Arrival {
   collectionName?: string;
   tags?: string[];
   rating?: number;
+  averageRating?: number;
+  totalReviews?: number;
+  reviewCount?: number;
   featured?: boolean;
   isBestSeller?: boolean;
   isTrending?: boolean;

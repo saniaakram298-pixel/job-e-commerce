@@ -1,13 +1,13 @@
 import { NextRequest } from 'next/server';
 import { connectDB } from '@/lib/mongodb';
-import { Review } from '@/models/Review';
-import { createErrorResponse, createSuccessResponse, getAuthToken, getUserIdFromToken } from '@/lib/response';
+import { Review, syncProductReviewStats } from '@/models/Review';
+import { createErrorResponse, createSuccessResponse, getAuthToken } from '@/lib/response';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const token = getAuthToken(request);
@@ -16,18 +16,19 @@ export async function POST(
     }
 
     await connectDB();
-
-    const reviewId = params.id;
+    const { id } = await params;
 
     const review = await Review.findByIdAndUpdate(
-      reviewId,
-      { approved: true },
+      id,
+      { status: 'approved' },
       { new: true }
     );
 
     if (!review) {
       return createErrorResponse('Review not found', 404);
     }
+
+    await syncProductReviewStats(review.productId as string);
 
     return createSuccessResponse(review, 'Review approved successfully');
   } catch (error) {

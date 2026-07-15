@@ -31,6 +31,7 @@ interface ProductGridProps {
 }
 
 export default function ProductGrid({ products = [], onAddToCart }: ProductGridProps) {
+  const [productList, setProductList] = useState<Product[]>(products);
   const [filteredProducts, setFilteredProducts] = useState<Product[]>(products);
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [sortBy, setSortBy] = useState<string>('default');
@@ -38,15 +39,68 @@ export default function ProductGrid({ products = [], onAddToCart }: ProductGridP
   const [showCart, setShowCart] = useState(false);
   const [wishlist, setWishlist] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const categories = ['All', 'women', 'men', 'accessories'];
 
   useEffect(() => {
+    if (products.length > 0) {
+      setProductList(products);
+      setFilteredProducts(products);
+      return;
+    }
+
+    let isMounted = true;
+    const loadProducts = async () => {
+      setLoading(true);
+      setError(null);
+
+      try {
+        const response = await fetch('/api/products?limit=12', { cache: 'no-store' });
+        if (!response.ok) throw new Error('Unable to load products');
+
+        const data = await response.json();
+        const payload = data?.data ?? data;
+        const loadedProducts = Array.isArray(payload?.products)
+          ? payload.products.map((product: any) => ({
+              _id: String(product._id || product.id || ''),
+              name: product.name || 'Untitled product',
+              price: Number(product.price || 0),
+              discountPrice: product.discountPrice != null ? Number(product.discountPrice) : undefined,
+              description: product.description || '',
+              images: Array.isArray(product.images) ? product.images : [product.img || ''],
+              category: product.category || '',
+              featured: Boolean(product.featured),
+            }))
+          : [];
+
+        if (isMounted) {
+          setProductList(loadedProducts);
+          setFilteredProducts(loadedProducts);
+        }
+      } catch (err) {
+        if (isMounted) {
+          setError(err instanceof Error ? err.message : 'Unable to load products');
+        }
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+        }
+      }
+    };
+
+    loadProducts();
+    return () => {
+      isMounted = false;
+    };
+  }, [products]);
+
+  useEffect(() => {
     filterAndSortProducts();
-  }, [products, selectedCategory, sortBy]);
+  }, [productList, selectedCategory, sortBy]);
 
   const filterAndSortProducts = () => {
-    let filtered = [...products];
+    let filtered = [...productList];
 
     // Filter by category
     if (selectedCategory !== 'All') {
@@ -198,6 +252,14 @@ export default function ProductGrid({ products = [], onAddToCart }: ProductGridP
           </div>
         </motion.div>
 
+        {loading && (
+          <div className="text-center py-8 text-sm uppercase tracking-widest text-gray-500">Loading products…</div>
+        )}
+
+        {error && !loading && (
+          <div className="text-center py-8 text-sm uppercase tracking-widest text-red-600">{error}</div>
+        )}
+
         {/* Product Grid */}
         <motion.div
           className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-16"
@@ -206,7 +268,7 @@ export default function ProductGrid({ products = [], onAddToCart }: ProductGridP
           whileInView="visible"
           viewport={{ once: true }}
         >
-          {filteredProducts.map(product => (
+          {!loading && !error && filteredProducts.map(product => (
             <motion.div
               key={product._id}
               variants={itemVariants}

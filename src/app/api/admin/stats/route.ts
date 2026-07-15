@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { connectDB } from '@/lib/mongodb';
 import { Order } from '@/models/Order';
 import { User } from '@/models/User';
+import { Product } from '@/models/Product';  // ← ADDED
 import { createErrorResponse, createSuccessResponse, getAuthToken, getUserIdFromToken } from '@/lib/response';
 
 export const dynamic = 'force-dynamic';
@@ -29,21 +30,21 @@ export async function GET(request: NextRequest) {
     // Get all orders
     const allOrders = await Order.find({}).select('totalPrice orderStatus createdAt userId customerEmail');
     
-    // Calculate stats
+    // Calculate order stats
     const totalRevenue = allOrders.reduce((sum, order) => sum + (order.totalPrice || 0), 0);
     const totalOrders = allOrders.length;
     const pendingOrders = allOrders.filter(o => o.orderStatus === 'pending' || o.orderStatus === 'processing').length;
     
-    // Get unique customers (both userId and customerEmail for guests)
+    // Get unique customers
     const uniqueCustomers = new Set();
     allOrders.forEach(order => {
-      if (order.userId) {
-        uniqueCustomers.add(order.userId);
-      } else if (order.customerEmail) {
-        uniqueCustomers.add(order.customerEmail);
-      }
+      if (order.userId) uniqueCustomers.add(order.userId);
+      else if (order.customerEmail) uniqueCustomers.add(order.customerEmail);
     });
     const totalCustomers = uniqueCustomers.size;
+
+    // ✅ NEW: Count all active products (includes categories/subcategories)
+    const totalProducts = await Product.countDocuments({ active: true });
 
     return createSuccessResponse(
       {
@@ -51,6 +52,7 @@ export async function GET(request: NextRequest) {
         totalOrders,
         pendingOrders,
         totalCustomers,
+        totalProducts,  // ← NEW FIELD
       },
       'Dashboard stats retrieved successfully'
     );

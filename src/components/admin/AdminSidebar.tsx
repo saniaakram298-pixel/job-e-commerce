@@ -48,7 +48,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
     { id: 'overview', label: 'Overview', icon: <LayoutGrid className="w-4 h-4" /> },
     { id: 'products', label: 'Products Log', icon: <Package className="w-4 h-4" /> },
     { id: 'orders', label: 'Orders', icon: <Truck className="w-4 h-4" /> },
-    { id: 'inventory', label: 'Inventory', icon: <Package className="w-4 h-4" /> },
+    { id: 'return orders', label: 'Return Orders', icon: <Package className="w-4 h-4" /> },
     { id: 'reviews', label: 'Reviews', icon: <MessageSquare className="w-4 h-4" /> },
     { id: 'activity', label: 'Activity Log', icon: <Activity className="w-4 h-4" /> },
   ];

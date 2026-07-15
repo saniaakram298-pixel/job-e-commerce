@@ -5,6 +5,7 @@ import { Arrival } from '@/types';
 import { useCart } from '@/context/CartContext';
 import { useState } from 'react';
 import QuickView from './QuickView';
+import { ReviewStars } from '@/components/ReviewStars';
 
 interface ProductCardClientProps {
     product: Arrival;
@@ -58,9 +59,15 @@ export default function ProductCardClient({ product }: ProductCardClientProps) {
                     {product.cat || product.category}
                 </p>
                 <div className="flex justify-between items-center mt-2">
-                    <p className="text-black text-sm font-medium">
-                        {product.price}
-                    </p>
+                    <div>
+                        <p className="text-black text-sm font-medium">
+                            {product.price}
+                        </p>
+                        <div className="mt-1 flex items-center gap-2">
+                            <ReviewStars rating={product.averageRating || 0} size="sm" />
+                            <span className="text-[11px] text-stone-500">{product.totalReviews ? `${product.totalReviews} reviews` : 'New'}</span>
+                        </div>
+                    </div>
                     <Link
                         href={`/product/${product._id || product.id}`}
                         className="text-[10px] text-stone-500 underline underline-offset-4 hover:text-black transition-all uppercase tracking-tighter"

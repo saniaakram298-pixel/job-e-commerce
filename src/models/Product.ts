@@ -10,8 +10,12 @@ export interface IProduct {
   discountPrice?: number;
   collection: string;
   category: ProductCategory;
+  subcategory?: string;
   images: string[];
   img?: string;
+  mainImage?: string;
+  thumbnails?: string[];
+  video?: string;
   materials: string[];
   sizes: Array<{
     size: string;
@@ -23,7 +27,8 @@ export interface IProduct {
   }>;
   tags: string[];
   rating: number;
-  reviews: string[];
+  averageRating: number;
+  totalReviews: number;
   careInstructions?: string;
   fit?: string;
   featured: boolean;
@@ -63,19 +68,26 @@ const productSchema = new Schema<IProduct>(
       required: true,
       index: true,
     },
+    subcategory: {
+      type: String,
+      index: true,
+    },
     images: [String],
     img: String,
+    mainImage: String,
+    thumbnails: [String],
+    video: String,
     materials: [String],
     sizes: [
       {
-        size: String,
-        stock: { type: Number, default: 0 },
+        size: { type: String, required: true, trim: true },
+        stock: { type: Number, default: 0, min: 0 },
       },
     ],
     colors: [
       {
-        color: String,
-        stock: { type: Number, default: 0 },
+        color: { type: String, required: true, trim: true },
+        stock: { type: Number, default: 0, min: 0 },
       },
     ],
     tags: [String],
@@ -85,7 +97,17 @@ const productSchema = new Schema<IProduct>(
       min: 0,
       max: 5,
     },
-    reviews: [String],
+    averageRating: {
+      type: Number,
+      default: 0,
+      min: 0,
+      max: 5,
+    },
+    totalReviews: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
     careInstructions: String,
     fit: String,
     featured: {
@@ -115,15 +137,15 @@ const productSchema = new Schema<IProduct>(
 // Note: Single field indexes are handled by field-level index: true properties
 // These compound indexes optimize common query patterns
 productSchema.index({ category: 1, createdAt: -1 }); // Category with latest products
+productSchema.index({ category: 1, subcategory: 1, createdAt: -1 }); // Subcategory products
 productSchema.index({ category: 1, active: 1 }); // Active products in category
+productSchema.index({ subcategory: 1, active: 1, createdAt: -1 }); // Active subcategory products
 productSchema.index({ featured: 1, createdAt: -1 }); // Featured products sorted by date
 productSchema.index({ isBestSeller: 1, active: 1, createdAt: -1 }); // Best seller products by date
 productSchema.index({ isTrending: 1, active: 1, createdAt: -1 }); // Trending products by date
 productSchema.index({ category: 1, price: 1 }); // Category products with price sorting
 productSchema.index({ active: 1, featured: 1, createdAt: -1 }); // Active featured products by date
 productSchema.index({ collection: 1, category: 1 }); // Collection and category combination
+productSchema.index({ collection: 1, category: 1, subcategory: 1 }); // Collection, category, and subcategory
 
-if (mongoose.models.Product) {
-  delete mongoose.models.Product;
-}
-export const Product: Model<IProduct> = mongoose.model<IProduct>('Product', productSchema);
+export const Product: Model<IProduct> = mongoose.models.Product || mongoose.model<IProduct>('Product', productSchema);

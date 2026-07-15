@@ -6,13 +6,14 @@ import { Arrival } from '@/types';
 interface CartItem extends Arrival {
   quantity: number;
   size?: string;
+  color?: string;
 }
 
 interface CartContextType {
   cart: CartItem[];
-  addToCart: (product: Arrival, quantity?: number, size?: string) => void;
-  updateQuantity: (id: string | number, quantity: number, size?: string) => void;
-  removeFromCart: (id: string | number, size?: string) => void;
+  addToCart: (product: Arrival, quantity?: number, size?: string, color?: string) => void;
+  updateQuantity: (id: string | number, quantity: number, size?: string, color?: string) => void;
+  removeFromCart: (id: string | number, size?: string, color?: string) => void;
   clearCart: () => void;
   cartCount: number;
 }
@@ -75,9 +76,14 @@ export const CartProvider = ({ children }: { children: React.ReactNode }) => {
     }
   }, [cart, isMounted, persistCart]);
 
-  const addToCart = (product: Arrival, quantity: number = 1, size?: string) => {
+  const addToCart = (product: Arrival, quantity: number = 1, size?: string, color?: string) => {
     setCart((prevCart) => {
-      const existingIndex = prevCart.findIndex((item) => item.id === product.id && (item.size || undefined) === (size || undefined));
+      const existingIndex = prevCart.findIndex(
+        (item) =>
+          item.id === product.id &&
+          (item.size || '') === (size || '') &&
+          (item.color || '') === (color || '')
+      );
 
       if (existingIndex >= 0) {
         const updated = [...prevCart];
@@ -88,23 +94,23 @@ export const CartProvider = ({ children }: { children: React.ReactNode }) => {
         return updated;
       }
 
-      return [...prevCart, { ...product, quantity, ...(size ? { size } : {}) }];
+      return [...prevCart, { ...product, quantity, ...(size ? { size } : {}), ...(color ? { color } : {}) }];
     });
   };
 
-  const updateQuantity = (id: string | number, quantity: number, size?: string) => {
+  const updateQuantity = (id: string | number, quantity: number, size?: string, color?: string) => {
     setCart((prevCart) =>
       prevCart.map((item) =>
-        item.id === id && (item.size || undefined) === (size || undefined)
+        item.id === id && (item.size || '') === (size || '') && (item.color || '') === (color || '')
           ? { ...item, quantity: Math.max(1, quantity) }
           : item
       )
     );
   };
 
-  const removeFromCart = (id: string | number, size?: string) => {
+  const removeFromCart = (id: string | number, size?: string, color?: string) => {
     setCart((prevCart) =>
-      prevCart.filter((item) => !(item.id === id && (item.size || undefined) === (size || undefined)))
+      prevCart.filter((item) => !(item.id === id && (item.size || '') === (size || '') && (item.color || '') === (color || '')))
     );
   };
 

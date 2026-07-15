@@ -10,6 +10,7 @@ import {
   UserCircle2, ChevronDown, Home as HomeIcon, ExternalLink, X,
 } from 'lucide-react';
 import { useAuthStore } from '@/hooks/useAuth';
+import { useSubcategoryStore } from '@/hooks/useSubcategoryStore';
 import { api } from '@/lib/client';
 import { Home } from './Collections';
 import { Inventory } from './Inventory';
@@ -34,7 +35,15 @@ const ActivityLogComponent = dynamic(() => import('@/components/admin/ActivityLo
   loading: () => <TabContentSkeleton />,
 });
 
+const ReturnOrdersComponent = dynamic(() => import('@/components/admin/ReturnOrders'), {
+  loading: () => <TabContentSkeleton />,
+});
+
 const CategoryView = dynamic(() => import('@/components/admin/CategoryView'), {
+  loading: () => <TabContentSkeleton />,
+});
+
+const SubcategoryView = dynamic(() => import('@/components/admin/SubcategoryView'), {
   loading: () => <TabContentSkeleton />,
 });
 
@@ -73,13 +82,9 @@ interface DashboardClientProps {
 }
 
 async function fetchCollectionsFromApi(): Promise<{ collections: CollectionItem[]; total: number }> {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 25000); // 25s timeout
-
     try {
         const res = await fetch('/api/collections?page=1&limit=1000', {
             cache: 'no-store',
-            signal: controller.signal,
         });
 
         if (!res.ok) {
@@ -95,14 +100,7 @@ async function fetchCollectionsFromApi(): Promise<{ collections: CollectionItem[
 
         return { collections, total };
     } catch (error: any) {
-        if (error.name === 'AbortError') {
-            const timeoutError = new Error('Request timeout: MongoDB query took too long');
-            (timeoutError as any).status = 503;
-            throw timeoutError;
-        }
         throw error;
-    } finally {
-        clearTimeout(timeoutId);
     }
 }
 
@@ -118,6 +116,7 @@ export default function AtelierDashboardClient({ collections: initialCollections
     const [searchQuery, setSearchQuery] = useState('');
     const [dismissedNotifications, setDismissedNotifications] = useState<Set<string>>(new Set());
     const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+    const [selectedSubcategory, setSelectedSubcategory] = useState<string | null>(null);
     const [showUploadForm, setShowUploadForm] = useState(false);
 
     const query = useQuery<{ collections: CollectionItem[]; total: number }, Error>({
@@ -136,6 +135,30 @@ export default function AtelierDashboardClient({ collections: initialCollections
     const collections = query.data?.collections ?? initialCollections ?? [];
     const totalItems = query.data?.total ?? collections.length;
     const { error, isLoading, isFetching, refetch } = query;
+
+    const { data: productInventory } = useQuery<{ total: number }, Error>({
+        queryKey: ['admin-product-count'],
+        queryFn: async () => {
+            const headers: HeadersInit = {};
+            if (token) {
+                headers.Authorization = `Bearer ${token}`;
+            }
+            const response = await fetch('/api/products?limit=1&page=1&sort=newest', {
+                cache: 'no-store',
+                headers,
+            });
+            if (!response.ok) {
+                throw new Error('Failed to load product count');
+            }
+            const data = await response.json();
+            return {
+                total: Number(data?.pagination?.total ?? data?.total ?? 0),
+            };
+        },
+        staleTime: 1000 * 30,
+        refetchOnWindowFocus: false,
+        retry: 2,
+    });
 
     const { data: orders = [] } = useQuery<any[], Error>({
         queryKey: ['dashboard-orders'],
@@ -164,10 +187,20 @@ export default function AtelierDashboardClient({ collections: initialCollections
         enabled: Boolean(token),
     });
 
+    const normalizedOrders = Array.isArray(orders) ? orders : [];
+    const normalizedPendingOrders = Array.isArray(pendingOrders) ? pendingOrders : [];
+
     const { data: adminCategories = [] } = useQuery<{ slug: string; name: string; productCount: number }[], Error>({
         queryKey: ['admin-categories'],
         queryFn: async () => {
-            const response = await fetch('/api/categories', { cache: 'no-store' });
+            const headers: HeadersInit = {};
+            if (token) {
+                headers.Authorization = `Bearer ${token}`;
+            }
+            const response = await fetch('/api/categories', {
+                cache: 'no-store',
+                headers,
+            });
             if (!response.ok) {
                 throw new Error('Failed to load categories');
             }
@@ -180,9 +213,63 @@ export default function AtelierDashboardClient({ collections: initialCollections
                   }))
                 : [];
         },
-        staleTime: 1000 * 60 * 5,
+        staleTime: 1000 * 30,
         refetchOnWindowFocus: false,
+        refetchOnMount: 'always',
         retry: 2,
+    });
+
+    const { data: adminStats } = useQuery<{
+        totalRevenue: number;
+        totalOrders: number;
+        totalProducts: number;
+        pendingOrders: number;
+        totalCustomers: number;
+    }, Error>({
+        queryKey: ['admin-stats'],
+        queryFn: async () => {
+            try {
+                const headers: HeadersInit = {};
+                if (token) {
+                    headers.Authorization = `Bearer ${token}`;
+                }
+                const response = await fetch('/api/admin/stats', {
+                    cache: 'no-store',
+                    headers,
+                });
+                if (!response.ok) {
+                    const errData = await response.json().catch(() => ({}));
+                    throw new Error(errData?.message || `Failed to load stats (${response.status})`);
+                }
+                const data = await response.json();
+                return (data?.data || {
+                    totalRevenue: 0,
+                    totalOrders: 0,
+                    totalProducts: 0,
+                    pendingOrders: 0,
+                    totalCustomers: 0,
+                }) as {
+                    totalRevenue: number;
+                    totalOrders: number;
+                    totalProducts: number;
+                    pendingOrders: number;
+                    totalCustomers: number;
+                };
+            } catch (err) {
+                console.error('[admin-stats] Error:', err);
+                return {
+                    totalRevenue: 0,
+                    totalOrders: 0,
+                    totalProducts: 0,
+                    pendingOrders: 0,
+                    totalCustomers: 0,
+                };
+            }
+        },
+        refetchOnMount: 'always',
+        staleTime: 1000 * 30,
+        retry: 2,
+        enabled: Boolean(token),
     });
 
     const serverError = error?.message ?? initialError ?? null;
@@ -217,7 +304,7 @@ export default function AtelierDashboardClient({ collections: initialCollections
             )
         );
 
-        const matchedOrders = (orders || []).filter((order: any) =>
+        const matchedOrders = normalizedOrders.filter((order: any) =>
             [order.orderNumber, order.customerName, order.customerEmail].some((value) =>
                 value?.toString().toLowerCase().includes(normalizedSearch)
             )
@@ -251,6 +338,8 @@ export default function AtelierDashboardClient({ collections: initialCollections
     }, [collections, orders, normalizedSearch, userEmail, userName]);
 
     const handleLogout = () => {
+        // Clear all subcategory data from session on logout
+        useSubcategoryStore.getState().clearAll();
         logout();
         window.location.href = '/login';
     };
@@ -258,6 +347,12 @@ export default function AtelierDashboardClient({ collections: initialCollections
     const handleCategorySelect = (categoryName: string) => {
         setSelectedCategory(categoryName);
         setActiveTab('category');
+    };
+
+    const handleSubcategorySelect = (categoryName: string, subcategoryName: string) => {
+        setSelectedCategory(categoryName);
+        setSelectedSubcategory(subcategoryName);
+        setActiveTab('subcategory');
     };
 
     const handleNotificationClick = (orderId: string, orderStatus: string) => {
@@ -272,14 +367,14 @@ export default function AtelierDashboardClient({ collections: initialCollections
     };
 
     const getNotifications = () => {
-        const pendingOrders = (orders || [])
+        const pendingOrdersForNotifications = normalizedOrders
             .filter((order: any) => ['pending', 'processing'].includes(order.orderStatus))
             .filter((order: any) => !dismissedNotifications.has(order._id));
-        
-        const followUps = (Array.isArray(pendingOrders) ? pendingOrders : [])
+
+        const followUps = normalizedPendingOrders
             .filter((order: any) => !dismissedNotifications.has(order._id));
-        
-        return [...pendingOrders, ...followUps].slice(0, 5);
+
+        return [...pendingOrdersForNotifications, ...followUps].slice(0, 5);
     };
 
     const notifications = getNotifications();
@@ -288,53 +383,57 @@ export default function AtelierDashboardClient({ collections: initialCollections
         const safeCollections = Array.isArray(collections) ? collections : [];
         const totalStock = safeCollections.reduce((acc: number, curr: CollectionItem) => acc + (curr.stock || 0), 0);
         const totalValue = safeCollections.reduce((acc: number, curr: CollectionItem) => acc + (curr.price || 0), 0);
-        const totalOrders = Array.isArray(orders) ? orders.length : 0;
-        const totalRevenue = Array.isArray(orders)
-            ? orders.reduce((acc: number, curr: any) => acc + Number(curr.totalPrice || 0), 0)
-            : 0;
-        const totalFollowUps = Array.isArray(pendingOrders) ? pendingOrders.length : 0;
+        
+        // Use server stats if available, otherwise fall back to manual calculation
+        const totalOrdersValue = (adminStats?.totalOrders ?? 0) || normalizedOrders.length;
+        const totalRevenueValue = (adminStats?.totalRevenue ?? 0) || normalizedOrders.reduce((acc: number, curr: any) => acc + Number(curr.totalPrice || 0), 0);
+        
+        const totalFollowUps = normalizedPendingOrders.length;
+        const liveProductCount = Number(productInventory?.total ?? 0);
+        
         return {
-            totalItems,
+            totalItems: liveProductCount > 0 ? liveProductCount : (Number.isFinite(totalItems) && totalItems > 0 ? totalItems : safeCollections.length),
             stock: totalStock,
             value: totalValue.toLocaleString(),
             lowStock: safeCollections.filter((c: CollectionItem) => c.stock < 5).length,
-            totalOrders,
-            totalRevenue: totalRevenue.toLocaleString(),
+            totalOrders: totalOrdersValue,
+            totalRevenue: typeof totalRevenueValue === 'number' ? totalRevenueValue.toLocaleString() : '0',
             totalFollowUps,
         };
-    }, [collections, orders, pendingOrders, totalItems]);
+    }, [collections, orders, pendingOrders, productInventory, totalItems, adminStats]);
 
     const notificationCount = useMemo(() => {
-        const pendingOrderCount = (orders || []).filter((order: any) => ['pending', 'processing'].includes(order.orderStatus)).length;
-        return pendingOrderCount + (Array.isArray(pendingOrders) ? pendingOrders.length : 0);
-    }, [orders, pendingOrders]);
+        const pendingOrderCount = normalizedOrders.filter((order: any) => ['pending', 'processing'].includes(order.orderStatus)).length;
+        return pendingOrderCount + normalizedPendingOrders.length;
+    }, [normalizedOrders, normalizedPendingOrders]);
+    
 
-    const overviewCards = [
-        {
-            label: 'Total Collections',
-            value: stats.totalItems.toString(),
-            icon: <Layers size={16} />,
-            onClick: () => setActiveTab('home'),
-        },
-        {
-            label: 'Total Orders',
-            value: stats.totalOrders.toString(),
-            icon: <Truck size={16} />,
-            onClick: () => setActiveTab('orders'),
-        },
-        {
-            label: 'Total Revenue',
-            value: `$${stats.totalRevenue}`,
-            icon: <ArrowUpRight size={16} />,
-            onClick: () => setActiveTab('orders'),
-        },
-        {
-            label: 'Total Follow-ups',
-            value: stats.totalFollowUps.toString(),
-            icon: <AlertCircle size={16} className="text-red-500" />,
-            onClick: () => setActiveTab('orders'),
-        },
-    ];
+   const overviewCards = [
+    {
+        label: 'Total Products',
+        value: (productInventory?.total ?? 0).toString(), // ✅ FIXED
+        icon: <Layers size={16} />,
+        onClick: () => setActiveTab('home'),
+    },
+    {
+        label: 'Total Orders',
+        value: stats.totalOrders.toString(),
+        icon: <Truck size={16} />,
+        onClick: () => setActiveTab('orders'),
+    },
+    {
+        label: 'Total Revenue',
+        value: `$${stats.totalRevenue}`,
+        icon: <ArrowUpRight size={16} />,
+        onClick: () => setActiveTab('orders'),
+    },
+    {
+        label: 'Total Follow-ups',
+        value: stats.totalFollowUps.toString(),
+        icon: <AlertCircle size={16} className="text-red-500" />,
+        onClick: () => setActiveTab('orders'),
+    },
+];
 
     const toggleTheme = () => setDarkMode(!darkMode);
 
@@ -344,7 +443,7 @@ export default function AtelierDashboardClient({ collections: initialCollections
                 activeTab={activeTab}
                 onTabChange={setActiveTab}
                 onCategorySelect={handleCategorySelect}
-                categories={adminCategories.map((category) => ({ id: category.slug, label: category.name }))}
+                categories={Array.isArray(adminCategories) ? adminCategories.map((category) => ({ id: category.slug, label: category.name })) : []}
                 isSidebarOpen={isSidebarOpen}
                 onClose={() => setIsSidebarOpen(false)}
                 darkMode={darkMode}
@@ -599,7 +698,12 @@ export default function AtelierDashboardClient({ collections: initialCollections
                         {/* Analytics Dashboard - Above Categories */}
                         <AnalyticsDashboard
                             onCategorySelect={handleCategorySelect}
-                            onCategoryCreated={() => queryClient.invalidateQueries({ predicate: (query) => query.queryKey[0] === 'admin-categories' })}
+                            onCategoryCreated={() => {
+                              queryClient.invalidateQueries({ queryKey: ['admin-categories'] });
+                              queryClient.invalidateQueries({ queryKey: ['admin-collections'] });
+                              queryClient.invalidateQueries({ queryKey: ['admin-stats'] });
+                              queryClient.invalidateQueries({ queryKey: ['admin-product-count'] });
+                            }}
                         />
                     </div>
                 )}
@@ -622,6 +726,11 @@ export default function AtelierDashboardClient({ collections: initialCollections
                         <ReviewsComponent darkMode={darkMode} />
                     </div>
                 )}
+                {activeTab === 'return orders' && (
+                    <div className="space-y-8 animate-in fade-in duration-700">
+                        <ReturnOrdersComponent />
+                    </div>
+                )}
                 {activeTab === 'activity' && (
                     <div className="space-y-8 animate-in fade-in duration-700">
                         <ActivityLogComponent darkMode={darkMode} />
@@ -633,6 +742,20 @@ export default function AtelierDashboardClient({ collections: initialCollections
                         <CategoryView
                             categoryName={selectedCategory}
                             onBack={() => setActiveTab('overview')}
+                            darkMode={darkMode}
+                        />
+                    </div>
+                )}
+
+                {activeTab === 'subcategory' && selectedCategory && selectedSubcategory && (
+                    <div className="animate-in fade-in duration-700">
+                        <SubcategoryView
+                            categoryName={selectedCategory}
+                            subcategoryName={selectedSubcategory}
+                            onBack={() => {
+                                setSelectedSubcategory(null);
+                                setActiveTab('category');
+                            }}
                             darkMode={darkMode}
                         />
                     </div>
@@ -657,8 +780,5 @@ function StatCard({ label, value, trend, icon, darkMode, onClick }: { label: str
             {trend && <p className="text-[10px] text-[#E5A93A] mt-2 font-bold uppercase">{trend}</p>}
         </button>
     );
-}
-function setManualRetryCount(arg0: (prev: any) => any) {
-    throw new Error('Function not implemented.');
 }
 

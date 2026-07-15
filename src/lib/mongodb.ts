@@ -16,88 +16,82 @@ function isTransientError(error: any): boolean {
     message.includes('econnreset') ||
     message.includes('ehostunreach') ||
     message.includes('enetunreach') ||
-    error.name === 'MongoNetworkError' ||
-    error.name === 'MongoNetworkTimeoutError' ||
-    error.name === 'MongoServerSelectionError'
+    message.includes('server selection timed out') ||
+    error?.name === 'MongoNetworkError' ||
+    error?.name === 'MongoNetworkTimeoutError' ||
+    error?.name === 'MongoServerSelectionError'
   );
 }
 
 export async function connectDB(): Promise<typeof mongoose | null> {
-  const MONGODB_URI = process.env.MONGODB_URI;
+  const mongoUri = process.env.MONGODB_URI || process.env.MONGO_URI || process.env.DATABASE_URL;
 
-  if (!MONGODB_URI) {
-    console.warn('MONGODB_URI not configured, running in offline mode');
+  if (!mongoUri) {
+    console.warn('MongoDB connection string is not configured. Set MONGODB_URI or MONGO_URI.');
     return cached.conn || null;
   }
 
-  if (cached.conn) {
+  if (cached.conn && mongoose.connection.readyState === 1) {
     return cached.conn;
   }
 
-  if (mongoose.connection.readyState === 1) {
-    cached.conn = mongoose;
-    return cached.conn;
-  }
-
-  if (mongoose.connection.readyState === 2 && cached.promise) {
+  if (cached.promise) {
     return cached.promise;
   }
 
-  if (!cached.promise) {
-    mongoose.set('strictQuery', false);
+  mongoose.set('strictQuery', false);
 
-    const retries = parseInt(process.env.MONGODB_CONNECT_RETRIES || '3', 10);
-    const baseDelayMs = 1000;
+  const retries = Number.parseInt(process.env.MONGODB_CONNECT_RETRIES || process.env.MONGO_CONNECT_RETRIES || '3', 10);
+  const baseDelayMs = 1000;
+  const timeoutMs = Number.parseInt(process.env.MONGODB_TIMEOUT_MS || process.env.MONGO_TIMEOUT_MS || '0', 10);
+  const effectiveTimeoutMs = Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : 0;
 
-    cached.promise = (async () => {
-      const options: ConnectOptions = {
-        bufferCommands: true,
-        bufferTimeoutMS: 30000,
-        serverSelectionTimeoutMS: 30000,
-        connectTimeoutMS: 30000,
-        socketTimeoutMS: 60000,
-        maxPoolSize: 10,
-        minPoolSize: 2,
-        family: 4,
-        autoCreate: true,
-        autoIndex: true,
-        retryWrites: true,
-        retryReads: true,
-      } as any;
+  const options: ConnectOptions = {
+    bufferCommands: false,
+    serverSelectionTimeoutMS: effectiveTimeoutMs,
+    connectTimeoutMS: effectiveTimeoutMs,
+    socketTimeoutMS: effectiveTimeoutMs,
+    maxPoolSize: 5,
+    minPoolSize: 0,
+    family: 4,
+    autoCreate: true,
+    autoIndex: true,
+    retryWrites: true,
+    retryReads: true,
+  } as ConnectOptions;
 
-      for (let attempt = 0; attempt < retries; attempt++) {
-        try {
-          const conn = await mongoose.connect(MONGODB_URI, options);
-          return conn;
-        } catch (error: any) {
-          const isTransient = isTransientError(error);
-          if (attempt < retries - 1 && isTransient) {
-            const delay = Math.min(30000, baseDelayMs * Math.pow(2, attempt));
-            await new Promise((res) => setTimeout(res, delay));
-          } else {
-            throw error;
-          }
+  cached.promise = (async () => {
+    for (let attempt = 0; attempt < retries; attempt += 1) {
+      try {
+        console.log(`MongoDB connection attempt ${attempt + 1}...`);
+        const conn = await mongoose.connect(mongoUri, options);
+        cached.conn = conn;
+        return conn;
+      } catch (error: any) {
+        const isTransient = isTransientError(error);
+        if (attempt < retries - 1 && isTransient) {
+          const delay = Math.min(10000, baseDelayMs * 2 ** attempt);
+          await new Promise((resolve) => setTimeout(resolve, delay));
+        } else {
+          console.error('Final MongoDB connection attempt failed:', error?.message || error);
+          return null;
         }
       }
+    }
 
-      return null;
-    })().catch((error) => {
-      cached.promise = null;
-      throw error;
-    });
-  }
+    return null;
+  })();
 
   try {
-    const conn = await cached.promise;
-    if (!conn) {
-      throw new Error('MongoDB connection failed: connection was not established');
+    const connectionResult = await cached.promise;
+    if (!connectionResult) {
+      cached.promise = null;
+      cached.conn = null;
     }
-    cached.conn = conn;
-  } catch (e) {
+    return connectionResult;
+  } catch (error) {
     cached.promise = null;
     cached.conn = null;
-    throw e;
+    return null;
   }
-
-  return cached.conn;
 }

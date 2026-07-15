@@ -101,7 +101,7 @@ export default function Departments({
 
                             {/* Horizontal Scroll Cards */}
                             <div className="relative">
-                                <div className="flex overflow-x-auto gap-8 pb-10 no-scrollbar snap-x snap-mandatory scroll-smooth">
+                                <div className="flex overflow-x-auto gap-8 pb-10 snap-x snap-mandatory scroll-smooth [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
                                     {/* Agar products nahi hain to 6 placeholder cards dikhao */}
                                     {(cat.products && cat.products.length > 0 ? cat.products : [1, 2, 3, 4, 5, 6]).map((item: any, idx: number) => {
                                         // Image Logic
@@ -152,10 +152,6 @@ export default function Departments({
                 </div>
             </div>
 
-            <style jsx global>{`
-                .no-scrollbar::-webkit-scrollbar { display: none; }
-                .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-            `}</style>
         </section>
     );
 }

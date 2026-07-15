@@ -20,7 +20,12 @@ export async function GET(request: NextRequest) {
       return createErrorResponse('Invalid token', 401);
     }
 
-    await connectDB();
+    try {
+      await connectDB();
+    } catch (connErr: any) {
+      console.error('Get orders - DB connect failed:', connErr?.message || connErr);
+      return createErrorResponse('Database temporarily unavailable', 503);
+    }
 
     // If the requester is an admin, return all orders; otherwise return user's orders
     const requestingUser = await User.findById(userId);
@@ -28,31 +33,84 @@ export async function GET(request: NextRequest) {
       return createErrorResponse('User not found', 401);
     }
 
+    const { searchParams } = new URL(request.url);
+    const page = Math.max(1, parseInt(searchParams.get('page') || '1', 10));
+    const limit = Math.min(50, Math.max(1, parseInt(searchParams.get('limit') || '10', 10)));
+    const skip = (page - 1) * limit;
+
     const query: Record<string, unknown> = {};
     if (requestingUser.role !== 'admin') {
       query.userId = userId;
     }
 
-    const orders = await Order.find(query)
-      .sort({ createdAt: -1 })
-      .populate({ path: 'items.productId', select: 'name images img' })
-      .lean();
+    const [orders, total] = await Promise.all([
+      Order.find(query)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      Order.countDocuments(query),
+    ]);
+
+    const productIds = Array.from(
+      new Set(
+        (orders as Array<Record<string, any>>)
+          .flatMap((order: Record<string, any>) => order.items || [])
+          .map((item: Record<string, any>) => {
+            const productRef = item?.productId;
+            if (productRef && typeof productRef === 'object' && !Array.isArray(productRef)) {
+              const objectIdValue = (productRef as Record<string, any>)._id || (productRef as Record<string, any>).id;
+              return objectIdValue ? String(objectIdValue) : null;
+            }
+            return productRef ? String(productRef) : null;
+          })
+          .filter(Boolean)
+      )
+    );
+
+    const productLookup = new Map<string, Record<string, any>>();
+    if (productIds.length > 0) {
+      const products = await Product.find({ _id: { $in: productIds } })
+        .select('name images img')
+        .lean();
+
+      for (const product of products as Array<Record<string, any>>) {
+        productLookup.set(String(product._id), product);
+      }
+    }
 
     for (const order of orders as Array<Record<string, any>>) {
       for (const item of order.items || []) {
         const productRef = item.productId;
-        const hasProductDetails = productRef && typeof productRef === 'object' && ('img' in productRef || 'images' in productRef);
+        const hasProductDetails = productRef && typeof productRef === 'object' && !Array.isArray(productRef) && ('img' in productRef || 'images' in productRef);
 
         if (!hasProductDetails && productRef) {
-          const product = await Product.findById(productRef).select('name images img').lean();
-          if (product) {
-            item.productId = product;
+          const productId = typeof productRef === 'object' && !Array.isArray(productRef)
+            ? String((productRef as Record<string, any>)._id || (productRef as Record<string, any>).id || '')
+            : String(productRef);
+
+          if (productId) {
+            const product = productLookup.get(productId);
+            if (product) {
+              item.productId = product;
+            }
           }
         }
       }
     }
 
-    return createSuccessResponse(orders, 'Orders fetched successfully');
+    return createSuccessResponse(
+      {
+        orders,
+        pagination: {
+          page,
+          limit,
+          total,
+          pages: Math.ceil(total / limit),
+        },
+      },
+      'Orders fetched successfully'
+    );
   } catch (error) {
     console.error('Get orders error:', error);
     return createErrorResponse('Internal server error', 500);
@@ -79,9 +137,9 @@ export async function POST(request: NextRequest) {
       }
 
       // Validate and decrement stock similar to guest-orders route
-      for (const item of items) {
-        const productId = item.productId || item.id || item._id;
-        const quantity = item.quantity || item.qty || 1;
+      for (const item of items as Array<Record<string, any>>) {
+        const productId = String(item.productId || item.id || item._id || '');
+        const quantity = Number(item.quantity || item.qty || 1);
         const size = item.size;
         const color = item.color;
 
@@ -170,6 +228,58 @@ export async function POST(request: NextRequest) {
       return createErrorResponse('Cart is empty', 400);
     }
 
+    for (const item of cart.items as Array<Record<string, any>>) {
+      const productId = String(item.productId || item.id || item._id || '');
+      const quantity = Number(item.quantity) || 0;
+      const size = item.size;
+      const color = item.color;
+
+      if (!productId || !quantity || quantity <= 0) {
+        return createErrorResponse('Invalid cart item', 400);
+      }
+
+      if (size) {
+        const normalizedSize = String(size).trim();
+        const updatedProduct = await Product.findOneAndUpdate(
+          {
+            _id: productId,
+            'sizes.size': new RegExp(`^${normalizedSize}$`, 'i'),
+            'sizes.stock': { $gte: quantity },
+          },
+          {
+            $inc: { 'sizes.$.stock': -quantity },
+          },
+          { new: true }
+        );
+
+        if (!updatedProduct) {
+          return createErrorResponse(`Product "${item.name || productId}" with size "${size}" is out of stock`, 400);
+        }
+      } else if (color) {
+        const normalizedColor = String(color).trim();
+        const updatedProduct = await Product.findOneAndUpdate(
+          {
+            _id: productId,
+            'colors.color': new RegExp(`^${normalizedColor}$`, 'i'),
+            'colors.stock': { $gte: quantity },
+          },
+          {
+            $inc: { 'colors.$.stock': -quantity },
+          },
+          { new: true }
+        );
+
+        if (!updatedProduct) {
+          return createErrorResponse(`Product "${item.name || productId}" with color "${color}" is out of stock`, 400);
+        }
+      } else {
+        const product = await Product.findById(productId);
+        if (!product) {
+          return createErrorResponse(`Product "${item.name || productId}" not found`, 400);
+        }
+      }
+    }
+
     const lastOrder = await Order.findOne({ orderNumber: { $exists: true } }).sort({ orderNumber: -1 }).select('orderNumber');
     const nextOrderNumber = lastOrder?.orderNumber ? lastOrder.orderNumber + 1 : 1;
 
@@ -187,7 +297,6 @@ export async function POST(request: NextRequest) {
 
     await order.save();
 
-    // Clear cart
     await Cart.deleteOne({ userId });
 
     return NextResponse.json({ success: true, message: 'Order created successfully', data: order, orderId: order._id }, { status: 201 });

@@ -12,6 +12,9 @@ interface Product {
   tags?: string[];
   category?: string;
   description?: string;
+  averageRating?: number;
+  totalReviews?: number;
+  rating?: number;
 }
 
 interface ProductShowcaseProps {
@@ -121,6 +124,8 @@ export default function ProductShowcase({
                 tags={product.tags}
                 category={product.category}
                 description={product.description}
+                averageRating={product.averageRating || product.rating || 0}
+                totalReviews={product.totalReviews || 0}
               />
             ))}
           </div>

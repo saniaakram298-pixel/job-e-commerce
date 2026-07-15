@@ -7,10 +7,19 @@ import Breadcrumb from '@/components/Breadcrumb';
 import CategorySlider from '@/components/CategorySlider';
 import { CategoryWithProducts } from '@/lib/categoryData';
 
+interface SliderProductPreview {
+  id?: string;
+  name?: string;
+  image?: string;
+  img?: string;
+}
+
 interface CollectionPageClientProps {
   currentSlug: string;
   categories: CategoryWithProducts[];
   currentCategoryName: string;
+  currentCategoryImage?: string;
+  currentCategoryProducts?: SliderProductPreview[];
   children: React.ReactNode;
 }
 
@@ -18,6 +27,8 @@ export default function CollectionPageClient({
   currentSlug,
   categories,
   currentCategoryName,
+  currentCategoryImage,
+  currentCategoryProducts,
   children,
 }: CollectionPageClientProps) {
   const [scrolled, setScrolled] = useState(false);
@@ -47,17 +58,22 @@ export default function CollectionPageClient({
 
   const sliderCategories = useMemo(
     () =>
-      categories.map((category) => ({
-        id: category.category,
-        name: category.name,
-        image: category.image || '',
-        products: (category.products || []).map((product) => ({
-          image: Array.isArray(product.images) && product.images.length > 0
-            ? product.images[0]
-            : '',
-        })),
-      })),
-    [categories]
+      categories.map((category) => {
+        const isCurrentCategory = String(category.category || '').toLowerCase() === currentSlug.toLowerCase();
+        const resolvedImage = category.image || (isCurrentCategory ? currentCategoryImage : '') || '';
+        const resolvedProducts = (isCurrentCategory ? currentCategoryProducts : category.products || []).map((product) => ({
+          image: product?.image || product?.img || '',
+          img: product?.img || '',
+        }));
+
+        return {
+          id: category.category,
+          name: category.name,
+          image: resolvedImage,
+          products: resolvedProducts,
+        };
+      }),
+    [categories, currentCategoryImage, currentCategoryProducts, currentSlug]
   );
 
   return (

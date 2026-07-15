@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
 
     const orders = await Order.find(query)
       .sort({ createdAt: -1 })
-      .select('orderNumber totalPrice paymentStatus orderStatus createdAt items')
+      .select('orderNumber totalPrice paymentStatus orderStatus createdAt deliveredAt returnStatus returnRequestedAt returnApprovedAt returnRejectedAt items')
       .populate({ path: 'items.productId', select: 'img images' })
       .lean();
 

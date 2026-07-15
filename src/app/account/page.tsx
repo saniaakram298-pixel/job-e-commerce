@@ -11,6 +11,9 @@ import {
   X,
   ShieldAlert,
   UserCircle2,
+  RotateCcw,
+  Image as ImageIcon,
+  Video,
 } from 'lucide-react';
 
 const supportCards = [
@@ -48,6 +51,8 @@ type Order = {
   totalPrice?: number;
   paymentStatus?: string;
   orderStatus?: string;
+  deliveredAt?: string;
+  returnStatus?: 'none' | 'pending' | 'approved' | 'rejected';
   createdAt?: string;
   items?: OrderItem[];
 };
@@ -69,6 +74,16 @@ export default function AccountPage() {
   const [isVerifying, setIsVerifying] = useState(false);
   const [step, setStep] = useState<'idle' | 'codeSent' | 'verified'>('idle');
   const [orders, setOrders] = useState<Order[]>([]);
+  const [returnFormVisible, setReturnFormVisible] = useState<string | null>(null);
+  const [returnReason, setReturnReason] = useState('');
+  const [returnDescription, setReturnDescription] = useState('');
+  const [returnImages, setReturnImages] = useState<File[]>([]);
+  const [returnVideo, setReturnVideo] = useState<File | null>(null);
+  const [returningOrderId, setReturningOrderId] = useState<string | null>(null);
+  const [returnSubmitting, setReturnSubmitting] = useState(false);
+  const [returnMessage, setReturnMessage] = useState('');
+  const [returnError, setReturnError] = useState('');
+  const [returnEligibility, setReturnEligibility] = useState<Record<string, { eligible: boolean; message: string }>>({});
 
   const selectedCard = supportCards.find((card) => card.id === activeCard);
 
@@ -147,14 +162,92 @@ export default function AccountPage() {
         return;
       }
 
-      setOrders(data.data?.orders || []);
+      const fetchedOrders = (data.data?.orders || []) as Order[];
+      setOrders(fetchedOrders);
       setStep('verified');
       setStatusMessage('Email verified successfully. Your orders are shown below.');
+
+      const eligibilityResponses = await Promise.all(
+        fetchedOrders.map(async (order) => {
+          try {
+            const res = await fetch(`/api/returns/eligibility?orderId=${order._id}&email=${encodeURIComponent(normalizedEmail)}`);
+            const result = await res.json();
+            return [order._id, result?.data || { eligible: false, message: 'Unable to check return eligibility.' }];
+          } catch {
+            return [order._id, { eligible: false, message: 'Unable to check return eligibility.' }];
+          }
+        })
+      );
+
+      const nextEligibility = Object.fromEntries(eligibilityResponses as Array<[string, { eligible: boolean; message: string }]>) as Record<string, { eligible: boolean; message: string }>;
+      setReturnEligibility(nextEligibility);
     } catch (error) {
       setErrorMessage('Something went wrong while verifying the code.');
       console.error('Verify code error:', error);
     } finally {
       setIsVerifying(false);
+    }
+  };
+
+  const openReturnForm = (orderId: string) => {
+    setReturnFormVisible(orderId);
+    setReturningOrderId(orderId);
+    setReturnReason('');
+    setReturnDescription('');
+    setReturnImages([]);
+    setReturnVideo(null);
+    setReturnMessage('');
+    setReturnError('');
+  };
+
+  const handleReturnSubmit = async (order: Order) => {
+    if (!returnReason.trim()) {
+      setReturnError('Please provide a return reason.');
+      return;
+    }
+
+    setReturnSubmitting(true);
+    setReturnMessage('');
+    setReturnError('');
+
+    try {
+      const formData = new FormData();
+      formData.append('orderId', order._id);
+      formData.append('customerName', email.trim());
+      formData.append('email', email.trim().toLowerCase());
+      formData.append('reason', returnReason.trim());
+      formData.append('description', returnDescription.trim());
+      if (order.items?.[0]?.productId && typeof order.items[0].productId === 'object') {
+        formData.append('productId', String(order.items[0].productId._id || ''));
+      }
+      returnImages.forEach((file) => formData.append('images', file));
+      if (returnVideo) {
+        formData.append('video', returnVideo);
+      }
+
+      const response = await fetch('/api/returns', {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        setReturnError(data.message || 'Unable to submit return request.');
+        return;
+      }
+
+      setReturnMessage('Your return request has been submitted successfully. Our team will review your request.');
+      setReturnFormVisible(null);
+      setReturningOrderId(null);
+      setReturnReason('');
+      setReturnDescription('');
+      setReturnImages([]);
+      setReturnVideo(null);
+    } catch (error) {
+      setReturnError('Something went wrong while submitting your return request.');
+      console.error('Return submit error:', error);
+    } finally {
+      setReturnSubmitting(false);
     }
   };
 
@@ -375,6 +468,78 @@ export default function AccountPage() {
                             </div>
                           );
                         })}
+                      </div>
+
+                      <div className="mt-6 space-y-4 rounded-3xl border border-slate-200 bg-slate-50 p-5">
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <div>
+                            <p className="text-sm font-semibold text-slate-900">Return request</p>
+                            <p className="text-sm text-slate-600">Use the return window only for eligible delivered orders.</p>
+                          </div>
+                          {order.orderStatus === 'delivered' ? (
+                            <button
+                              type="button"
+                              onClick={() => openReturnForm(order._id)}
+                              className="inline-flex items-center gap-2 rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800"
+                            >
+                              <RotateCcw className="h-4 w-4" /> Return Order
+                            </button>
+                          ) : null}
+                        </div>
+
+                        {returnEligibility[order._id]?.message ? (
+                          <p className={`text-sm ${returnEligibility[order._id]?.eligible ? 'text-emerald-700' : 'text-amber-700'}`}>
+                            {returnEligibility[order._id]?.message}
+                          </p>
+                        ) : null}
+
+                        {returnFormVisible === order._id ? (
+                          <div className="space-y-4 rounded-3xl border border-slate-200 bg-white p-4">
+                            <div className="grid gap-4 md:grid-cols-2">
+                              <div>
+                                <label className="block text-sm font-medium text-slate-700">Customer Name</label>
+                                <input className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm" value={email} onChange={(event) => setEmail(event.target.value)} />
+                              </div>
+                              <div>
+                                <label className="block text-sm font-medium text-slate-700">Email</label>
+                                <input className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm" value={email} readOnly />
+                              </div>
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-slate-700">Return Reason</label>
+                              <select className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm" value={returnReason} onChange={(event) => setReturnReason(event.target.value)}>
+                                <option value="">Select a reason</option>
+                                <option value="Wrong item">Wrong item</option>
+                                <option value="Damaged item">Damaged item</option>
+                                <option value="Incorrect size">Incorrect size</option>
+                                <option value="Changed mind">Changed mind</option>
+                                <option value="Other">Other</option>
+                              </select>
+                            </div>
+                            <div>
+                              <label className="block text-sm font-medium text-slate-700">Additional details</label>
+                              <textarea className="mt-2 min-h-[96px] w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm" value={returnDescription} onChange={(event) => setReturnDescription(event.target.value)} />
+                            </div>
+                            <div className="grid gap-4 md:grid-cols-2">
+                              <div>
+                                <label className="block text-sm font-medium text-slate-700">Upload product image</label>
+                                <input type="file" accept="image/*" multiple className="mt-2 w-full text-sm" onChange={(event) => setReturnImages(Array.from(event.target.files || []))} />
+                              </div>
+                              <div>
+                                <label className="block text-sm font-medium text-slate-700">Upload product video</label>
+                                <input type="file" accept="video/*" className="mt-2 w-full text-sm" onChange={(event) => setReturnVideo(event.target.files?.[0] || null)} />
+                              </div>
+                            </div>
+                            {returnMessage ? <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">{returnMessage}</div> : null}
+                            {returnError ? <div className="rounded-2xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-900">{returnError}</div> : null}
+                            <div className="flex flex-wrap gap-3">
+                              <button type="button" onClick={() => handleReturnSubmit(order)} disabled={returnSubmitting} className="rounded-2xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400">
+                                {returnSubmitting ? 'Submitting...' : 'Submit return request'}
+                              </button>
+                              <button type="button" onClick={() => setReturnFormVisible(null)} className="rounded-2xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700">Cancel</button>
+                            </div>
+                          </div>
+                        ) : null}
                       </div>
                     </article>
                   ))}
