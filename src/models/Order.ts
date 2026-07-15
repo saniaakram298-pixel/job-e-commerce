@@ -35,6 +35,12 @@ export interface IOrder {
   orderStatus: 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
   trackingNumber?: string;
   notes?: string;
+  deliveredAt?: Date;
+  returnStatus?: 'none' | 'pending' | 'approved' | 'rejected';
+  returnRequestedAt?: Date;
+  returnApprovedAt?: Date;
+  returnRejectedAt?: Date;
+  returnNotes?: string;
   followUpNotes?: Array<{
     message: string;
     timestamp: Date;
@@ -103,6 +109,16 @@ const orderSchema = new Schema<IOrder>(
     },
     trackingNumber: String,
     notes: String,
+    deliveredAt: Date,
+    returnStatus: {
+      type: String,
+      enum: ['none', 'pending', 'approved', 'rejected'],
+      default: 'none',
+    },
+    returnRequestedAt: Date,
+    returnApprovedAt: Date,
+    returnRejectedAt: Date,
+    returnNotes: String,
     followUpNotes: [
       {
         message: String,

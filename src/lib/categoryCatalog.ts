@@ -9,6 +9,7 @@ export interface SharedCategoryItem {
   name: string;
   description?: string;
   productCount: number;
+  image?: string;
 }
 
 export function normalizeCategorySlug(value: unknown): string {
@@ -28,18 +29,66 @@ export function formatCategoryName(value: string): string {
     .trim();
 }
 
+function escapeRegex(value: string): string {
+  return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+// ✅ SAME IMAGE LOGIC (unchanged)
+async function getRepresentativeCategoryImage(item: SharedCategoryItem): Promise<string> {
+  try {
+    const candidates = Array.from(
+      new Set(
+        [item.slug, item.name, formatCategoryName(item.slug), formatCategoryName(item.name)]
+          .map((value) => normalizeCategorySlug(value))
+          .filter(Boolean)
+      )
+    );
+
+    const matchQueries = candidates.flatMap((value) => [
+      { category: { $regex: new RegExp(`^${escapeRegex(value)}$`, 'i') } },
+      { subcategory: { $regex: new RegExp(`^${escapeRegex(value)}$`, 'i') } },
+    ]);
+
+    const product = await Product.findOne({
+      active: true,
+      $or: matchQueries,
+    })
+      .select('images img')
+      .sort({ createdAt: -1 })
+      .lean();
+
+    if (product) {
+      const images = Array.isArray((product as any).images) ? (product as any).images : [];
+      return images[0] || (product as any).img || '';
+    }
+  } catch (error) {
+    console.error('[categoryCatalog] Error resolving category image:', error);
+  }
+
+  return '';
+}
+
+// 🔥🔥🔥 MAIN FIXED FUNCTION
 export async function getSharedCategoryCatalog(): Promise<SharedCategoryItem[]> {
   try {
     await connectDB();
 
-    const [categoryDocs, rawCategories, categoryStats] = await Promise.all([
+    // ✅ FETCH CATEGORIES + PRODUCT COUNTS
+    const [categoryDocs, categoryStats] = await Promise.all([
       Category.find({}, { name: 1, slug: 1, description: 1 }).lean().exec(),
-      Product.distinct('category', { active: true }),
+
+      // 🔥 FIX: include BOTH category + subcategory
       Product.aggregate([
         {
           $match: {
             active: true,
-            category: { $exists: true, $ne: null },
+          },
+        },
+        {
+          $project: {
+            category: {
+              $ifNull: ['$category', '$subcategory'], // ✅ KEY FIX
+            },
           },
         },
         {
@@ -48,14 +97,12 @@ export async function getSharedCategoryCatalog(): Promise<SharedCategoryItem[]> 
             productCount: { $sum: 1 },
           },
         },
-        {
-          $sort: { productCount: -1, _id: 1 },
-        },
       ]),
     ]);
 
     const categoryMap = new Map<string, SharedCategoryItem>();
 
+    // ✅ STEP 1: categories from DB
     (categoryDocs || []).forEach((doc: any) => {
       const rawName = String(doc?.name || '').trim();
       const slug = normalizeCategorySlug(doc?.slug || rawName);
@@ -69,21 +116,7 @@ export async function getSharedCategoryCatalog(): Promise<SharedCategoryItem[]> 
       });
     });
 
-    (rawCategories || []).forEach((value) => {
-      const rawName = String(value || '').trim();
-      const slug = normalizeCategorySlug(rawName);
-      if (!slug) return;
-
-      if (!categoryMap.has(slug)) {
-        categoryMap.set(slug, {
-          slug,
-          name: rawName || formatCategoryName(slug),
-          description: '',
-          productCount: 0,
-        });
-      }
-    });
-
+    // ✅ STEP 2: apply product counts
     (categoryStats || []).forEach((item: any) => {
       const slug = normalizeCategorySlug(item._id);
       if (!slug) return;
@@ -103,6 +136,7 @@ export async function getSharedCategoryCatalog(): Promise<SharedCategoryItem[]> 
       }
     });
 
+    // ✅ SORT + CLEAN
     const catalog = Array.from(categoryMap.values())
       .map((item) => ({
         ...item,
@@ -110,7 +144,15 @@ export async function getSharedCategoryCatalog(): Promise<SharedCategoryItem[]> 
       }))
       .sort((a, b) => b.productCount - a.productCount || a.name.localeCompare(b.name));
 
-    return catalog;
+    // ✅ ADD IMAGES
+    const catalogWithImages = await Promise.all(
+      catalog.map(async (item) => ({
+        ...item,
+        image: await getRepresentativeCategoryImage(item),
+      }))
+    );
+
+    return catalogWithImages;
   } catch (error) {
     console.error('[categoryCatalog] Error loading categories:', error);
     return [];

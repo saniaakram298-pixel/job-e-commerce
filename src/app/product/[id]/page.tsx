@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import { connectDB } from '@/lib/mongodb';
 import { Product } from '@/models/Product';
 import ProductDetailClient from '@/components/ProductDetailClient';
+import { getTotalStock } from '@/lib/productStock';
 
 interface ProductDetailPageProps {
   params: { id: string };
@@ -67,6 +68,7 @@ export default async function ProductDetailPage({ params }: ProductDetailPagePro
     sizes: normalizeProductSizes(product.sizes),
     colors: normalizeProductColors(product.colors),
     careInstructions: product.careInstructions || '',
+    stock: getTotalStock({ sizes: normalizeProductSizes(product.sizes), colors: normalizeProductColors(product.colors) }),
     createdAt: product.createdAt instanceof Date ? product.createdAt.toISOString() : product.createdAt,
     updatedAt: product.updatedAt instanceof Date ? product.updatedAt.toISOString() : product.updatedAt,
   };

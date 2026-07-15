@@ -74,6 +74,7 @@ export const ProductUploadForm: React.FC<ProductUploadFormProps> = ({
 
   const [uploadedImages, setUploadedImages] = useState<File[]>([]);
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
+  const [videoFile, setVideoFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -105,6 +106,11 @@ export const ProductUploadForm: React.FC<ProductUploadFormProps> = ({
   const removeImage = (index: number) => {
     setUploadedImages((prev) => prev.filter((_, i) => i !== index));
     setImagePreviews((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleVideoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0] ?? null;
+    setVideoFile(file);
   };
 
   const addMaterial = () => {
@@ -210,10 +216,20 @@ export const ProductUploadForm: React.FC<ProductUploadFormProps> = ({
       submitFormData.append('colors', JSON.stringify(formData.colors));
       submitFormData.append('tags', JSON.stringify(formData.tags));
 
-      // Add images
-      uploadedImages.forEach((file, index) => {
-        submitFormData.append(`images`, file);
+      const mainImageFile = uploadedImages[0] ?? null;
+      const thumbnailFiles = uploadedImages.slice(1);
+
+      if (mainImageFile) {
+        submitFormData.append('mainImage', mainImageFile);
+      }
+
+      thumbnailFiles.forEach((file) => {
+        submitFormData.append('thumbnails', file);
       });
+
+      if (videoFile) {
+        submitFormData.append('video', videoFile);
+      }
 
       // Use provided onSubmit or default API call
       if (onSubmit) {
@@ -249,6 +265,7 @@ export const ProductUploadForm: React.FC<ProductUploadFormProps> = ({
         });
         setUploadedImages([]);
         setImagePreviews([]);
+        setVideoFile(null);
 
         if (onSuccess) {
           onSuccess();

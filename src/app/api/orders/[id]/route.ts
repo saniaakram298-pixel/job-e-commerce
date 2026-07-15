@@ -39,12 +39,35 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     const order = await Order.findById(params.id);
     if (!order) return createErrorResponse('Order not found', 404);
 
-    // Validate and apply order status update
     if (body.orderStatus) {
       const allowed = ['pending', 'processing', 'shipped', 'delivered', 'cancelled'];
       if (!allowed.includes(body.orderStatus)) {
         return createErrorResponse('Invalid orderStatus value', 400);
       }
+
+      if (body.orderStatus === 'cancelled' && order.orderStatus !== 'cancelled') {
+        for (const item of order.items || []) {
+          const productId = item.productId;
+          const quantity = Number(item.quantity) || 0;
+          const size = item.size;
+          const color = item.color;
+
+          if (!productId || !quantity || quantity <= 0) continue;
+
+          if (size) {
+            await Product.updateOne(
+              { _id: productId, 'sizes.size': new RegExp(`^${String(size).trim()}$`, 'i') },
+              { $inc: { 'sizes.$.stock': quantity } }
+            );
+          } else if (color) {
+            await Product.updateOne(
+              { _id: productId, 'colors.color': new RegExp(`^${String(color).trim()}$`, 'i') },
+              { $inc: { 'colors.$.stock': quantity } }
+            );
+          }
+        }
+      }
+
       order.orderStatus = body.orderStatus;
     }
 

@@ -16,7 +16,8 @@ export default function RootLayout({
   children: ReactNode;
 }) {
   return (
-    <html lang="en">
+    // 'overflow-x-hidden' html par lagaya taake browser level par horizontal scroll block ho sake
+    <html lang="en" className="overflow-x-hidden">
       <head>
         <link
           href="https://fonts.googleapis.com/css2?family=Noto+Serif:ital,wght@0,100..900;1,100..900&family=Manrope:wght@200..800&display=swap"
@@ -27,7 +28,9 @@ export default function RootLayout({
           rel="stylesheet"
         />
       </head>
-      <body className="bg-background text-on-surface selection:bg-primary-fixed selection:text-on-primary-fixed">
+      {/* Body par 'overflow-x-hidden w-full max-w-full' force kiya hai safe rendering k liye */}
+      <body className="bg-background text-on-surface selection:bg-primary-fixed selection:text-on-primary-fixed overflow-x-hidden w-full max-w-full relative">
+        
         {/* Toast Container for notifications */}
         <ToastContainer />
         
@@ -35,7 +38,12 @@ export default function RootLayout({
         <CartProvider>
           <ReactQueryProvider>
             <GlobalSanitizer />
-            {children}
+            
+            {/* Safe Zone Wrapper: Yeh div kisi bhi page content (children) ko mobile layout se bahar push nahi hone degi */}
+            <div className="w-full max-w-full overflow-x-hidden relative">
+              {children}
+            </div>
+
           </ReactQueryProvider>
         </CartProvider>
       </body>

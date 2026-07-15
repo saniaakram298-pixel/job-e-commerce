@@ -1,5 +1,6 @@
 import dynamic from 'next/dynamic';
 import { cache, Suspense } from 'react';
+import { notFound } from 'next/navigation';
 import { connectDB } from '@/lib/mongodb';
 import { Product } from '@/models/Product';
 import CollectionPageClient from '@/components/CollectionPageClient';
@@ -34,43 +35,43 @@ interface ServerProduct {
   image: string;
 }
 
+const buildStrictCategoryProductQuery = (categorySlug: string) => {
+  const normalizedSlug = String(categorySlug || '').trim().toLowerCase();
+
+  // Build a flexible regex from the slug so it matches stored category names
+  // regardless of separators (spaces, hyphens, underscores).
+  const words = normalizedSlug.split(/[^a-z0-9]+/).filter(Boolean);
+  const escapedWords = words.map((w) => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  const pattern = `^${escapedWords.join('[\\s\\-_]*')}$`;
+  const flexibleRegex = new RegExp(pattern, 'i');
+
+  return {
+    active: true,
+    $or: [
+      { category: { $regex: flexibleRegex } },
+      { subcategory: { $regex: flexibleRegex } },
+    ],
+  };
+};
+
 const fetchCategoriesForPage = cache(async (): Promise<CategoryWithProducts[]> => {
   try {
     const sharedCategories = await getSharedCategoryCatalog();
 
-    const categoryProducts = await Promise.all(
-      sharedCategories.map(async (category) => {
-        const representativeProduct = await Product.findOne({ active: true, category: category.slug })
-          .sort({ createdAt: -1 })
-          .select('images img name price category featured createdAt tags stock')
-          .lean();
+    // IMPORTANT: Do NOT perform Product.findOne for every category here.
+    // That was causing background DB work for adjacent categories when
+    // navigating to a collection. Instead return metadata only; product
+    // lists and representative images are loaded lazily and/or for the
+    // current category only via fetchInitialProducts.
+    const categoryMeta = sharedCategories.map((category) => ({
+      category: (category.slug as ProductCategory) || 'accessories',
+      name: category.name,
+      products: [],
+      total: category.productCount || 0,
+      image: category.image || '',
+    }));
 
-        const image = Array.isArray(representativeProduct?.images) && representativeProduct.images.length > 0
-          ? representativeProduct.images[0]
-          : representativeProduct?.img || '';
-
-        const productShape: CategoryProduct = {
-          _id: String(representativeProduct?._id || ''),
-          name: String(representativeProduct?.name || category.name),
-          price: Number(representativeProduct?.price || 0),
-          images: image ? [image] : [],
-          category: (category.slug as ProductCategory) || 'accessories',
-          featured: Boolean(representativeProduct?.featured),
-          createdAt: representativeProduct?.createdAt ? String(representativeProduct.createdAt) : new Date().toISOString(),
-          tags: Array.isArray(representativeProduct?.tags) ? representativeProduct.tags : [],
-        };
-
-        return {
-          category: (category.slug as ProductCategory) || 'accessories',
-          name: category.name,
-          products: image ? [productShape] : [],
-          total: category.productCount || 0,
-          image,
-        };
-      })
-    );
-
-    return categoryProducts;
+    return categoryMeta;
   } catch (error) {
     console.error('Error fetching categories for page:', error);
     return [];
@@ -81,14 +82,57 @@ const fetchInitialProducts = cache(async (slug: string, limit = 4): Promise<{ pr
   try {
     await connectDB();
 
-    const [results, total] = await Promise.all([
-      Product.find({ category: { $regex: `^${slug}$`, $options: 'i' }, active: true })
+    const categoryQuery = buildStrictCategoryProductQuery(slug);
+
+    let [results, total] = await Promise.all([
+      Product.find(categoryQuery)
         .sort({ createdAt: -1 })
         .limit(limit)
-        .select('_id name price images img')
+        .select('_id name price images img category')
         .lean(),
-      Product.countDocuments({ category: { $regex: `^${slug}$`, $options: 'i' }, active: true }),
+      Product.countDocuments(categoryQuery),
     ]);
+
+    if ((total || 0) === 0 && slug) {
+      try {
+        const lookupSlug = String(slug || '').trim().toLowerCase();
+        const catDoc = await (await import('@/models/Category')).Category.findOne({ slug: lookupSlug }).lean();
+
+        const altQueries: any[] = [];
+        altQueries.push({ category: String(slug) });
+        if (catDoc) {
+          if (catDoc.name) {
+            altQueries.push({ category: catDoc.name });
+            altQueries.push({ subcategory: catDoc.name });
+          }
+          if (catDoc.slug) {
+            altQueries.push({ category: catDoc.slug });
+            altQueries.push({ subcategory: catDoc.slug });
+          }
+          if (catDoc._id) {
+            altQueries.push({ category: String(catDoc._id) });
+            altQueries.push({ subcategory: String(catDoc._id) });
+          }
+        }
+
+        const fallbackQuery = { active: true, $or: altQueries };
+
+        const fbResults = await Product.find(fallbackQuery)
+          .sort({ createdAt: -1 })
+          .limit(limit)
+          .select('_id name price images img category')
+          .lean();
+
+        const fbTotal = await Product.countDocuments(fallbackQuery);
+
+        if ((fbResults || []).length > 0 || fbTotal > 0) {
+          results = fbResults;
+          total = fbTotal;
+        }
+      } catch (err) {
+        console.error('Collections fallback lookup error:', err);
+      }
+    }
 
     const products: ServerProduct[] = (results as any[]).map((p) => ({
       id: String(p._id || p.id),
@@ -125,19 +169,28 @@ export default async function Page({
 }) {
   const slug = decodeURIComponent(params.slug || '');
 
-  try {
-    const [{ products, total }, allCategories] = await Promise.all([
-      fetchInitialProducts(slug, 4),
-      fetchCategoriesForPage(),
-    ]);
+  if (!slug) {
+    notFound();
+  }
 
-    const currentCategoryName = slug.replace(/-/g, ' ');
+  const currentCategoryName = slug.replace(/-/g, ' ');
+
+  try {
+    const allCategories = await fetchCategoriesForPage();
+
+    // Fetch initial page of products for this category on the server so the
+    // CollectionProductsClient can render immediately without falling into
+    // the "No products found" empty state. This avoids client-only fetches
+    // for the first batch and ensures SEO/UX correctness.
+    const initial = await fetchInitialProducts(slug, 4);
 
     return (
       <CollectionPageClient
         currentSlug={slug}
         categories={allCategories}
         currentCategoryName={currentCategoryName}
+        currentCategoryImage={initial.products[0]?.image || ''}
+        currentCategoryProducts={initial.products}
       >
         <div className="max-w-[1440px] mx-auto px-6 md:px-12 py-12">
           <header className="mb-8 animate-in fade-in duration-300">
@@ -149,8 +202,8 @@ export default async function Page({
 
           <Suspense fallback={null}>
             <CollectionProductsClient
-              products={products}
-              totalProducts={total}
+              products={initial.products}
+              totalProducts={initial.total}
               categorySlug={slug}
               initialVisibleCount={4}
               batchSize={4}

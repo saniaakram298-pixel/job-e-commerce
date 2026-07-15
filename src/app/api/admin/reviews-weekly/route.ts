@@ -22,7 +22,17 @@ export async function GET(request: NextRequest) {
       createdAt: { $gte: sevenDaysAgo },
     }).sort({ createdAt: -1 }).lean();
 
-    return createSuccessResponse(reviews, 'Weekly reviews retrieved');
+    const normalizedReviews = (reviews || []).map((review: any) => ({
+      ...review,
+      _id: review._id?.toString?.() ?? String(review._id),
+      name: review.userName || review.name || 'Anonymous',
+      email: review.userEmail || review.email || '',
+      message: review.comment || review.message || '',
+      approved: review.status === 'approved' || review.approved === true,
+      status: review.status || (review.approved ? 'approved' : 'pending'),
+    }));
+
+    return createSuccessResponse(normalizedReviews, 'Weekly reviews retrieved');
   } catch (error) {
     console.error('Weekly reviews error:', error);
     return createErrorResponse('Internal server error', 500);

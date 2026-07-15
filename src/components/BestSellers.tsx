@@ -1,8 +1,10 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Arrival } from '@/types';
 import { useRouter } from 'next/navigation';
+import Slider from 'react-slick';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface BestSellersProps {
     arrivals: Arrival[];
@@ -10,122 +12,188 @@ interface BestSellersProps {
 
 export default function BestSellers({ arrivals }: BestSellersProps) {
     const router = useRouter();
-    const [products, setProducts] = useState<Arrival[]>(arrivals || []);
+
+    const [products, setProducts] = useState<Arrival[]>([]);
     const [loading, setLoading] = useState(false);
 
-    const placeholderImg = 'https://images.unsplash.com/photo-1441984904996-e0b6ba687e12?q=80&w=800';
+    const sliderRef = useRef<Slider | null>(null);
 
+    const placeholderImg =
+        'https://images.unsplash.com/photo-1441984904996-e0b6ba687e12?q=80&w=800';
+
+    // ✅ CACHE LOAD
     useEffect(() => {
-        if (!arrivals || arrivals.length === 0) {
+        const cached = localStorage.getItem('best_sellers_cache');
+        if (cached) {
+            setProducts(JSON.parse(cached));
+        }
+    }, []);
+
+    // ✅ FETCH
+    useEffect(() => {
+        if (products.length === 0 && (!arrivals || arrivals.length === 0)) {
             let active = true;
-            const loadBestSellers = async () => {
+
+            const load = async () => {
                 setLoading(true);
                 try {
-                    const response = await fetch('/api/products/best-seller?limit=12');
-                    if (!response.ok) throw new Error('Unable to load best sellers');
-                    const payload = await response.json();
-                    const items = Array.isArray(payload?.data?.products) ? payload.data.products : [];
-                    if (active) setProducts(items as Arrival[]);
-                } catch (error) {
-                    console.error('Failed to load best sellers:', error);
-                    if (active) setProducts([]);
+                    const res = await fetch('/api/products/best-seller?limit=20');
+                    const data = await res.json();
+                    const items = data?.data?.products || [];
+
+                    if (active) {
+                        setProducts(items);
+                        localStorage.setItem(
+                            'best_sellers_cache',
+                            JSON.stringify(items)
+                        );
+                    }
+                } catch (e) {
+                    console.error(e);
                 } finally {
-                    if (active) setLoading(false);
+                    setLoading(false);
                 }
             };
 
-            void loadBestSellers();
+            load();
             return () => {
                 active = false;
             };
+        } else if (arrivals?.length > 0) {
+            setProducts(arrivals);
         }
     }, [arrivals]);
 
-    const normalize = (s: any = '') => String(s).toLowerCase().replace(/[-_\s]/g, '');
-
-    const databaseBestSellers = useMemo(() => {
-        const source = products.length > 0 ? products : arrivals || [];
-        return (source || []).filter((item: any) => {
-            const imgPath = item.images?.[0] || item.img;
-            const hasValidImg = imgPath && imgPath.trim() !== '';
-            const collectionValue = normalize(item.collectionName || item.collection || '');
-            const isInBestSellerCollection = ['bestseller', 'bestsellers'].includes(collectionValue);
-            const tags = Array.isArray(item.tags) ? item.tags : item.tags ? [item.tags] : [];
-            const hasBestSellerTag = tags.some((tag: string) => {
-                const cleanTag = normalize(tag);
-                return ['bestseller', 'bestsellers', 'topseller'].includes(cleanTag);
-            });
-            const isFeatured = item.featured === true;
-            const explicitBestSeller = item.isBestSeller === true;
-            return hasValidImg && (explicitBestSeller || isInBestSellerCollection || hasBestSellerTag || isFeatured);
-        });
-    }, [arrivals, products]);
-
-    const displayItems = (databaseBestSellers.length > 0 ? databaseBestSellers : products.length > 0 ? products : arrivals || []).slice(0, 60);
-    const rows = Array.from({ length: 3 }, (_, index) => displayItems.slice(index * 20, index * 20 + 20));
+    const displayItems = products.slice(0, 20);
 
     return (
-        <section className="bg-stone-50 py-20 border-y border-stone-100">
+        <section className="bg-stone-50 py-20">
             <div className="max-w-[1440px] mx-auto px-6 md:px-12">
-                <div className="space-y-10">
-                    {loading && products.length === 0 ? (
-                        <div className="text-sm text-stone-500">Loading featured products…</div>
-                    ) : null}
-                    {rows.map((row, rowIndex) => (
-                        row.length > 0 ? (
-                            <div key={rowIndex} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-6">
-                                {row.map((item: any, idx: number) => {
-                                    const productImg = item.images?.[0] || item.img || placeholderImg;
 
-                                    return (
-                                        <div
-                                            key={item._id || item.id || `${rowIndex}-${idx}`}
-                                            onClick={() => (item._id || item.id) && router.push(`/product/${item._id || item.id}`)}
-                                            className="group cursor-pointer overflow-hidden rounded-sm border border-stone-200/80 bg-white p-4 shadow-sm transition-all duration-300 hover:shadow-md"
-                                        >
-                                            <div className="aspect-[4/5] overflow-hidden bg-stone-100 relative rounded-sm">
-                                                <img
-                                                    src={productImg}
-                                                    alt={item.name || item.title || 'Best Seller'}
-                                                    className="w-full h-full object-cover transition-transform duration-[1.2s] cubic-bezier(0.4, 0, 0.2, 1) group-hover:scale-105"
-                                                    loading="lazy"
-                                                />
+                {/* HEADER */}
+                <div className="flex justify-between items-center mb-6">
+                    <h2 className="text-2xl font-semibold">Best Sellers</h2>
 
-                                                <div className="absolute top-3 left-3">
-                                                    <span className="bg-stone-900 text-white text-[8px] px-2.5 py-1 uppercase tracking-[0.2em] font-bold rounded-xs shadow-xs">
-                                                        Best Seller
-                                                    </span>
-                                                </div>
-                                            </div>
+                    <div className="flex gap-2">
+                        <button
+                            onClick={() => sliderRef.current?.slickPrev()}
+                            className="w-10 h-10 rounded-full border flex items-center justify-center"
+                        >
+                            <ChevronLeft size={18} />
+                        </button>
 
-                                            <div className="mt-5 space-y-2">
-                                                <div className="flex justify-between items-start gap-2">
-                                                    <h4 className="font-serif text-lg tracking-tight text-stone-800 line-clamp-1 group-hover:text-stone-900 transition-colors">
-                                                        {item.name || item.title || `Curated Piece 0${rowIndex * 20 + idx + 1}`}
-                                                    </h4>
-                                                    <p className="font-mono text-sm text-stone-900 font-bold bg-stone-50 px-2 py-0.5 rounded-sm whitespace-nowrap">
-                                                        {typeof item.price === 'number' ? `$${item.price}` : (item.price || '$240')}
-                                                    </p>
-                                                </div>
-
-                                                <div className="flex items-center justify-between pt-1 border-t border-stone-100">
-                                                    <p className="text-[9px] text-stone-400 uppercase tracking-[0.15em]">
-                                                        Premium Collection
-                                                    </p>
-                                                    <span className="text-[10px] text-stone-900 opacity-0 group-hover:opacity-100 font-bold tracking-wider uppercase transition-all duration-300 flex items-center gap-1 translate-x-2 group-hover:translate-x-0">
-                                                        View Details
-                                                        <span className="text-[12px] font-normal">→</span>
-                                                    </span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        ) : null
-                    ))}
+                        <button
+                            onClick={() => sliderRef.current?.slickNext()}
+                            className="w-10 h-10 rounded-full border flex items-center justify-center"
+                        >
+                            <ChevronRight size={18} />
+                        </button>
+                    </div>
                 </div>
+
+                {loading && <p>Loading...</p>}
+
+                {/* ✅ SLIDER */}
+                <Slider
+                    ref={sliderRef}
+                    arrows={false}
+                    dots={false}
+                    infinite={false}
+                    speed={500}
+                    slidesToShow={5}
+                    slidesToScroll={1}
+                    responsive={[
+                        { breakpoint: 1280, settings: { slidesToShow: 4 } },
+                        { breakpoint: 1024, settings: { slidesToShow: 3 } },
+                        { breakpoint: 640, settings: { slidesToShow: 2 } },
+                    ]}
+                >
+                    {displayItems.map((item, idx) => (
+                        <div key={item._id || item.id || idx} className="px-2">
+                            <ProductCard
+                                item={item}
+                                router={router}
+                                placeholderImg={placeholderImg}
+                            />
+                        </div>
+                    ))}
+                </Slider>
             </div>
         </section>
+    );
+}
+
+/* ✅ PRODUCT CARD */
+
+function ProductCard({ item, router, placeholderImg }: any) {
+    const id = item._id || item.id;
+
+    const images = item.images?.length
+        ? item.images
+        : [item.img || placeholderImg];
+
+    const mainImg = images[0];
+
+    const [hoverImg, setHoverImg] = useState(mainImg);
+
+    return (
+        <div className="group relative bg-white rounded-md overflow-hidden border hover:shadow-2xl transition-all duration-500 hover:-translate-y-2 cursor-pointer">
+
+            {/* IMAGE */}
+            <div className="relative aspect-[4/5] overflow-hidden">
+
+                <img
+                    src={hoverImg}
+                    className="w-full h-full object-cover transition duration-500 group-hover:scale-105"
+                />
+
+                {/* BADGE */}
+                <div className="absolute top-3 left-3 z-10">
+                    <span className="bg-black text-white text-[10px] px-3 py-1 rounded uppercase tracking-wider">
+                        Best Seller
+                    </span>
+                </div>
+
+                {/* OVERLAY */}
+                <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition duration-500" />
+
+                {/* THUMBNAILS */}
+                {images.length > 1 && (
+                    <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-2 opacity-0 group-hover:opacity-100 transition">
+                        {images.slice(0, 4).map((img: string, i: number) => (
+                            <img
+                                key={i}
+                                src={img}
+                                onMouseEnter={() => setHoverImg(img)}
+                                onMouseLeave={() => setHoverImg(mainImg)}
+                                className="w-10 h-10 object-cover border rounded cursor-pointer hover:scale-110 transition"
+                            />
+                        ))}
+                    </div>
+                )}
+
+                {/* VIEW BUTTON */}
+                <button
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        router.push(`/product/${id}`);
+                    }}
+                    className="absolute bottom-14 left-1/2 -translate-x-1/2 translate-y-4 opacity-0 group-hover:opacity-100 group-hover:translate-y-0 transition bg-black text-white px-4 py-2 text-xs rounded"
+                >
+                    View Product
+                </button>
+            </div>
+
+            {/* CONTENT */}
+            <div className="p-4">
+                <h4 className="text-sm font-semibold line-clamp-1">
+                    {item.name || item.title}
+                </h4>
+
+                <p className="font-bold text-sm mt-2">
+                    ${item.price || 240}
+                </p>
+            </div>
+        </div>
     );
 }

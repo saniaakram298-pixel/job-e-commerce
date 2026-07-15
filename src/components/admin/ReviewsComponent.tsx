@@ -13,6 +13,7 @@ interface Review {
   message: string;
   createdAt: string;
   approved?: boolean;
+  status?: 'pending' | 'approved' | 'rejected' | 'cancelled';
   productId?: string;
 }
 
@@ -30,9 +31,9 @@ const ReviewsComponent: React.FC<ReviewsComponentProps> = ({ darkMode = false })
       const allReviews = res?.data ?? res ?? [];
       
       if (filterApproved === 'approved') {
-        return allReviews.filter((r: Review) => r.approved);
+        return allReviews.filter((r: Review) => r.status === 'approved' || r.approved === true);
       } else if (filterApproved === 'pending') {
-        return allReviews.filter((r: Review) => !r.approved);
+        return allReviews.filter((r: Review) => !(r.status === 'approved' || r.approved === true));
       }
       return allReviews;
     },
@@ -43,8 +44,8 @@ const ReviewsComponent: React.FC<ReviewsComponentProps> = ({ darkMode = false })
   });
 
   const totalReviews = reviews.length;
-  const approvedCount = reviews.filter(r => r.approved).length;
-  const pendingCount = reviews.filter(r => !r.approved).length;
+  const approvedCount = reviews.filter((r) => r.status === 'approved' || r.approved === true).length;
+  const pendingCount = reviews.filter((r) => !(r.status === 'approved' || r.approved === true)).length;
   const averageRating = reviews.length > 0
     ? (reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length).toFixed(1)
     : 0;
@@ -162,10 +163,10 @@ const ReviewsComponent: React.FC<ReviewsComponentProps> = ({ darkMode = false })
                     <p className={`font-semibold truncate ${darkMode ? 'text-white' : 'text-gray-900'}`}>
                       {review.name}
                     </p>
-                    {review.approved && (
+                    {(review.status === 'approved' || review.approved === true) && (
                       <Check className="w-4 h-4 text-green-600 flex-shrink-0" />
                     )}
-                    {!review.approved && (
+                    {!(review.status === 'approved' || review.approved === true) && (
                       <AlertCircle className="w-4 h-4 text-orange-600 flex-shrink-0" />
                     )}
                   </div>
@@ -189,7 +190,7 @@ const ReviewsComponent: React.FC<ReviewsComponentProps> = ({ darkMode = false })
               </p>
 
               {/* Action Button */}
-              {!review.approved && (
+              {!(review.status === 'approved' || review.approved === true) && (
                 <button
                   type="button"
                   onClick={() => handleApproveReview(review._id)}

@@ -17,6 +17,51 @@ interface AnalyticsDashboardProps {
 }
 
 const COLORS = ['#8b7355', '#a0826d', '#b59985', '#c9b0a0', '#d4bfb1', '#d9c8bd', '#dfd0c4', '#e8d9cc', '#f0e4d9', '#f5ede4'];
+const ANALYTICS_CACHE_KEY = 'analytics-dashboard-cache-v1';
+const ANALYTICS_CACHE_TTL_MS = 1000 * 60 * 10;
+
+function readCachedAnalytics() {
+  if (typeof window === 'undefined') return null;
+
+  try {
+    const raw = window.localStorage.getItem(ANALYTICS_CACHE_KEY);
+    if (!raw) return null;
+
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return null;
+
+    return parsed as {
+      categories: CategoryData[];
+      totalCategories: number;
+      totalProducts: number;
+      cachedAt: number;
+    };
+  } catch (err) {
+    console.warn('Failed to read analytics cache', err);
+    return null;
+  }
+}
+
+function writeCachedAnalytics(payload: { categories: CategoryData[]; totalCategories: number; totalProducts: number }) {
+  if (typeof window === 'undefined') return;
+
+  try {
+    window.localStorage.setItem(
+      ANALYTICS_CACHE_KEY,
+      JSON.stringify({
+        ...payload,
+        cachedAt: Date.now(),
+      })
+    );
+  } catch (err) {
+    console.warn('Failed to save analytics cache', err);
+  }
+}
+
+function isAnalyticsCacheFresh(cached: { cachedAt?: number } | null) {
+  if (!cached?.cachedAt) return false;
+  return Date.now() - cached.cachedAt < ANALYTICS_CACHE_TTL_MS;
+}
 
 export default function AnalyticsDashboard({ onCategorySelect, onCategoryCreated }: AnalyticsDashboardProps) {
   const [categories, setCategories] = useState<CategoryData[]>([]);
@@ -31,12 +76,41 @@ export default function AnalyticsDashboard({ onCategorySelect, onCategoryCreated
   const [modalError, setModalError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchCategoryData();
+    void fetchCategoryData(false);
+    
+    // Set up auto-refresh every 30 seconds to catch new additions
+    const interval = setInterval(() => {
+      void fetchCategoryData(false);
+    }, 30000);
+    
+    return () => clearInterval(interval);
   }, []);
 
-  const fetchCategoryData = async () => {
-    try {
+  const applyAnalyticsSnapshot = (snapshot: { categories: CategoryData[]; totalCategories: number; totalProducts: number }) => {
+    setCategories(snapshot.categories);
+    setTotalCategories(snapshot.totalCategories);
+    setTotalProducts(snapshot.totalProducts);
+    setError(null);
+    setLoading(false);
+  };
+
+  const fetchCategoryData = async (forceRefresh = false) => {
+    const cached = readCachedAnalytics();
+
+    if (!forceRefresh && cached && isAnalyticsCacheFresh(cached)) {
+      applyAnalyticsSnapshot({
+        categories: cached.categories,
+        totalCategories: cached.totalCategories,
+        totalProducts: cached.totalProducts,
+      });
+      return;
+    }
+
+    if (!cached || forceRefresh) {
       setLoading(true);
+    }
+
+    try {
       const response = await fetch('/api/categories', { cache: 'no-store' });
       const data = await response.json();
 
@@ -49,24 +123,41 @@ export default function AnalyticsDashboard({ onCategorySelect, onCategoryCreated
             }))
           : [];
 
-        setCategories(fetchedCategories);
-        setTotalCategories(
-          Number.isFinite(Number(data.totalCategories))
-            ? Number(data.totalCategories)
-            : fetchedCategories.length
-        );
-        setTotalProducts(
-          fetchedCategories.reduce((sum: number, cat: CategoryData) => sum + cat.productCount, 0)
-        );
-        setError(null);
+        const nextTotalCategories = Number.isFinite(Number(data.totalCategories))
+          ? Number(data.totalCategories)
+          : fetchedCategories.length;
+        const nextTotalProducts = fetchedCategories.reduce((sum: number, cat: CategoryData) => sum + cat.productCount, 0);
+
+        const nextSnapshot = {
+          categories: fetchedCategories,
+          totalCategories: nextTotalCategories,
+          totalProducts: nextTotalProducts,
+        };
+
+        writeCachedAnalytics(nextSnapshot);
+        applyAnalyticsSnapshot(nextSnapshot);
+      } else if (cached) {
+        applyAnalyticsSnapshot({
+          categories: cached.categories,
+          totalCategories: cached.totalCategories,
+          totalProducts: cached.totalProducts,
+        });
       } else {
         setError(data.error || 'Failed to fetch categories');
+        setLoading(false);
       }
     } catch (err) {
       console.error('Error fetching categories:', err);
-      setError('Failed to load category data');
-    } finally {
-      setLoading(false);
+      if (cached) {
+        applyAnalyticsSnapshot({
+          categories: cached.categories,
+          totalCategories: cached.totalCategories,
+          totalProducts: cached.totalProducts,
+        });
+      } else {
+        setError('Failed to load category data');
+        setLoading(false);
+      }
     }
   };
 
@@ -98,7 +189,7 @@ export default function AnalyticsDashboard({ onCategorySelect, onCategoryCreated
       setShowAddCategoryModal(false);
       setModalError(null);
       setError(null);
-      await fetchCategoryData();
+      await fetchCategoryData(true);
       onCategoryCreated?.();
     } catch (err) {
       console.error('Error creating category:', err);

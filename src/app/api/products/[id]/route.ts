@@ -4,6 +4,7 @@ import { Product } from '@/models/Product';
 import { createErrorResponse, createSuccessResponse } from '@/lib/response';
 import mongoose from 'mongoose';
 import { revalidatePath } from 'next/cache';
+import { normalizeProductVariants } from '@/lib/productStock';
 export const dynamic = 'force-dynamic';
 
 // Next.js latest versions mein params ek Promise hota hai
@@ -42,10 +43,23 @@ export async function PUT(
             return createErrorResponse('Invalid product ID', 400);
         }
 
-        // Product update karein
+        if (body.stock !== undefined) {
+            return createErrorResponse('The stock field is no longer supported. Use sizes[].stock and colors[].stock instead.', 400);
+        }
+
+        const sanitizedBody = { ...body };
+        if (Array.isArray(sanitizedBody.sizes) || Array.isArray(sanitizedBody.colors)) {
+            const { sizes, colors } = normalizeProductVariants(sanitizedBody.sizes, sanitizedBody.colors);
+            if (Array.isArray(sanitizedBody.sizes) && sizes.length === 0) {
+                return createErrorResponse('At least one size is required', 400);
+            }
+            sanitizedBody.sizes = sizes;
+            sanitizedBody.colors = colors;
+        }
+
         const updatedProduct = await Product.findByIdAndUpdate(
             id,
-            { $set: body }, // Sirf wahi fields update hongi jo body mein aayengi
+            { $set: sanitizedBody },
             { new: true, runValidators: true }
         );
 

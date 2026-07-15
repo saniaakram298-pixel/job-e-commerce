@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import { connectDB } from '@/lib/mongodb';
 import { Product } from '@/models/Product';
 import { createErrorResponse, createSuccessResponse } from '@/lib/response';
+import { getTotalStock } from '@/lib/productStock';
 
 export const dynamic = 'force-dynamic';
 
@@ -49,7 +50,7 @@ export async function GET(request: NextRequest) {
       images: Array.isArray(product.images) ? product.images : [],
       category: product.category || '',
       collection: product.collection || '',
-      stock: Number(product.stock ?? 0),
+      stock: getTotalStock(product),
       sizes: Array.isArray(product.sizes)
         ? product.sizes.map((size: any) => ({ size: size.size, stock: size.stock }))
         : [],

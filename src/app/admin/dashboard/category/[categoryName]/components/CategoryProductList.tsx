@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { Trash2, Edit, Eye } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { getTotalStock } from '@/lib/productStock';
 import {
   getCachedProducts,
   setCachedProducts,
@@ -27,7 +28,6 @@ interface Product {
   img: string;
   category: string;
   collection?: string;
-  stock: number;
   sizes?: Size[];
   colors?: Color[];
   description?: string;
@@ -48,7 +48,6 @@ interface EditProductForm {
   description: string;
   price: string;
   discountPrice: string;
-  stock: string;
   category: string;
   collection: string;
   img: string;
@@ -107,8 +106,12 @@ export default function CategoryProductList({
     try {
       setLoading(true);
       const response = await fetch(
-        `/api/products?category=${encodeURIComponent(decodedCategory)}&page=1&limit=100&sort=newest`
+        `/api/products?category=${encodeURIComponent(decodedCategory)}&page=1&limit=1000&sort=newest`,
+        { cache: 'no-store' }
       );
+      if (!response.ok) {
+        throw new Error('Failed to load products');
+      }
       const data = await response.json();
       const productsData = Array.isArray(data?.data?.products)
         ? data.data.products.map((item: any) => ({
@@ -120,7 +123,6 @@ export default function CategoryProductList({
             img: item.img || (Array.isArray(item.images) && item.images.length > 0 ? item.images[0] : ''),
             images: Array.isArray(item.images) ? item.images : [],
             category: item.category || '',
-            stock: Number(item.stock ?? 0),
             description: item.description || '',
             collection: item.collection || '',
             sizes: Array.isArray(item.sizes)
@@ -163,12 +165,11 @@ export default function CategoryProductList({
       description: product.description || '',
       price: String(product.price ?? 0),
       discountPrice: product.discountPrice != null ? String(product.discountPrice) : '',
-      stock: String(product.stock ?? 0),
       category: product.category || '',
       collection: product.collection || '',
       img: product.img || '',
-      sizes: product.sizes && product.sizes.length > 0 ? product.sizes : [{ size: 'Free Size', stock: product.stock ?? 0 }],
-      colors: product.colors && product.colors.length > 0 ? product.colors : [{ color: 'Default', stock: product.stock ?? 0 }],
+      sizes: product.sizes && product.sizes.length > 0 ? product.sizes : [{ size: 'Free Size', stock: 0 }],
+      colors: product.colors && product.colors.length > 0 ? product.colors : [{ color: 'Default', stock: 0 }],
     });
   };
 
@@ -255,7 +256,6 @@ export default function CategoryProductList({
       colors: editValues.colors
         .map((color) => ({ color: String(color.color).trim(), stock: Number(color.stock || 0) }))
         .filter((item) => item.color),
-      stock: Number(editValues.stock || 0),
     };
 
     setEditSaving(true);
@@ -280,7 +280,6 @@ export default function CategoryProductList({
         category: payload.category,
         collection: payload.collection,
         img: payload.img,
-        stock: payload.stock,
         sizes: payload.sizes,
         colors: payload.colors,
       };
@@ -461,8 +460,8 @@ export default function CategoryProductList({
 
                   {/* Stock */}
                   <td className="px-6 py-4 text-sm font-medium">
-                    <span className={product.stock > 0 ? 'text-green-700' : 'text-red-700'}>
-                      {product.stock}
+                    <span className={getTotalStock({ sizes: product.sizes, colors: product.colors }) > 0 ? 'text-green-700' : 'text-red-700'}>
+                      {getTotalStock({ sizes: product.sizes, colors: product.colors })}
                     </span>
                   </td>
 
@@ -607,15 +606,9 @@ export default function CategoryProductList({
                 />
               </label>
 
-              <label className="block text-sm">
-                <span className="text-gray-700">Stock</span>
-                <input
-                  type="number"
-                  value={editValues.stock}
-                  onChange={(e) => handleEditValueChange('stock', e.target.value)}
-                  className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-amber-500 focus:outline-none focus:ring-2 focus:ring-amber-200"
-                />
-              </label>
+              <div className="block text-sm md:col-span-2 rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                Stock is managed per size or color above.
+              </div>
             </div>
 
             <div className="mt-6 grid gap-4 md:grid-cols-2">

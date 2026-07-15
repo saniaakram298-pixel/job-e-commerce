@@ -1,11 +1,13 @@
 'use client';
 
 import React, { useState } from 'react';
+import { getTotalStock } from '@/lib/productStock';
 import Link from 'next/link';
 import { Product, Arrival } from '@/types';
 import { useCart } from '@/context/CartContext';
 import { buildGuestOrderPayload } from '@/lib/orderPayloads';
 import { toastManager } from '@/lib/toast';
+import ProductReviews from '@/components/ProductReviews';
 
 interface ProductDetailClientProps {
   product: Partial<Product> | null;
@@ -177,6 +179,7 @@ export default function ProductDetailClient({ product, isOpen, onClose }: Produc
   const selectedSizeStock =
     safeProduct.sizes.find((entry) => entry.size === selectedSize)?.stock ?? 0;
   const hasSizeOptions = safeProduct.sizes.length > 0;
+  const totalStock = getTotalStock({ sizes: safeProduct.sizes, colors: safeProduct.colors });
   const canAddToCart = !hasSizeOptions || selectedSizeStock > 0;
   const mainImage =
     safeProduct.images[selectedImageIndex] || safeProduct.images[0] || '';
@@ -235,7 +238,7 @@ export default function ProductDetailClient({ product, isOpen, onClose }: Produc
             <h1 className="text-6xl font-serif italic tracking-tighter leading-none">{safeProduct.name}</h1>
             <div className="flex items-center gap-6">
               <p className="text-3xl font-bold tracking-tighter">${safeProduct.price.toLocaleString()}</p>
-              {selectedSizeStock > 0 ? (
+              {totalStock > 0 ? (
                 <span className="text-[9px] font-bold bg-green-50 text-green-700 px-3 py-1 rounded-full uppercase tracking-widest">In Stock</span>
               ) : (
                 <span className="text-[9px] font-bold bg-red-50 text-red-700 px-3 py-1 rounded-full uppercase tracking-widest">Sold Out</span>
@@ -257,7 +260,7 @@ export default function ProductDetailClient({ product, isOpen, onClose }: Produc
                   type="button"
                   disabled={entry.stock <= 0}
                   onClick={() => setSelectedSize(entry.size)}
-                  className={`w-16 h-16 border text-[11px] font-bold transition-all flex items-center justify-center ${
+                  className={`w-24 h-20 border text-[11px] font-bold transition-all flex flex-col items-center justify-center gap-1 ${
                     entry.stock <= 0
                       ? 'bg-stone-50 text-stone-300 border-stone-100 cursor-not-allowed line-through'
                       : selectedSize === entry.size
@@ -265,7 +268,8 @@ export default function ProductDetailClient({ product, isOpen, onClose }: Produc
                       : 'bg-white border-stone-200 hover:border-black'
                   }`}
                 >
-                  {entry.size}
+                  <span>{entry.size}</span>
+                  <span className="text-[9px] font-normal">{entry.stock > 0 ? `${entry.stock} left` : 'Out of stock'}</span>
                 </button>
               ))}
             </div>
@@ -294,7 +298,10 @@ export default function ProductDetailClient({ product, isOpen, onClose }: Produc
               type="button"
               disabled={!canAddToCart}
               onClick={() => {
-                if (!canAddToCart) return;
+                if (!canAddToCart) {
+                  toastManager.error('This size is currently out of stock');
+                  return;
+                }
 
                 const cartItem: Arrival = {
                   id: safeProduct._id,
@@ -304,9 +311,11 @@ export default function ProductDetailClient({ product, isOpen, onClose }: Produc
                   cat: safeProduct.category || safeProduct.collection,
                   category: safeProduct.category || safeProduct.collection,
                   images: safeProduct.images,
+                  updatedAt: new Date().toISOString(),
+                  createdAt: new Date().toISOString(),
                 };
 
-                addToCart(cartItem, 1, hasSizeOptions ? selectedSize : undefined);
+                addToCart(cartItem, 1, hasSizeOptions ? selectedSize : undefined, selectedColor || undefined);
                 toastManager.success('Added to cart');
                 handleProceed();
                 setDrawerOpen(true);
@@ -327,6 +336,10 @@ export default function ProductDetailClient({ product, isOpen, onClose }: Produc
           </div>
         </div>
       </main>
+
+      <div className="max-w-[1400px] mx-auto px-8 pb-20">
+        <ProductReviews productId={safeProduct._id} productName={safeProduct.name} />
+      </div>
 
       {drawerOpen && (
         <div className="fixed inset-0 z-50 flex items-end justify-end">

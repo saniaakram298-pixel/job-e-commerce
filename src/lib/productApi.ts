@@ -32,6 +32,12 @@ interface ProductsResponse {
   error?: string;
 }
 
+const getApiUrl = (path: string) => {
+  const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, '');
+  if (!baseUrl) return path;
+  return `${baseUrl}${path}`;
+};
+
 /**
  * Fetch products with standardized error handling
  */
@@ -51,7 +57,7 @@ export async function fetchProducts({
     params.append('page', String(page));
     params.append('limit', String(limit));
 
-    const response = await fetch(`/api/products?${params.toString()}`, {
+    const response = await fetch(getApiUrl(`/api/products?${params.toString()}`), {
       cache: cache === 'default' ? 'default' : 'no-store',
     });
 

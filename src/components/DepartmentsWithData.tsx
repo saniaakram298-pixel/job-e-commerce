@@ -246,6 +246,8 @@ export default function DepartmentsWithData({
                                                                     cat: product.category || cat.name,
                                                                     category: product.category || cat.name,
                                                                     images: product.images ?? [],
+                                                                    createdAt: new Date().toISOString(),
+                                                                    updatedAt: new Date().toISOString(),
                                                                 });
                                                             }}
                                                             className="w-full py-3 bg-white text-black text-[10px] uppercase tracking-widest font-bold hover:bg-stone-900 hover:text-white transition-colors duration-300"

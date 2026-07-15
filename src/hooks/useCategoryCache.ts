@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { getTotalStock } from '@/lib/productStock';
 
 interface Product {
   _id: string;
@@ -68,13 +69,10 @@ export function useCategoryProducts(category: string | null) {
         return cached;
       }
 
-      // Fetch from API
-     
-
+      // Fetch from API - NO TIMEOUT
       try {
         const response = await fetch(
           `/api/products?category=${encodeURIComponent(category)}&page=1&limit=20&sort=newest`,
-          
         );
 
         if (!response.ok) {
@@ -94,7 +92,7 @@ export function useCategoryProducts(category: string | null) {
           img: item.img || (Array.isArray(item.images) && item.images.length > 0 ? item.images[0] : ''),
           images: Array.isArray(item.images) ? item.images : [],
           category: item.category || '',
-          stock: Number(item.stock ?? 0),
+          stock: getTotalStock(item),
           description: item.description || '',
           collection: item.collection || '',
           sizes: Array.isArray(item.sizes)
@@ -111,7 +109,7 @@ export function useCategoryProducts(category: string | null) {
       } catch (error) {
         console.error(`Error fetching products for category ${category}:`, error);
         throw error;
-      } 
+      }
     },
     staleTime: 1000 * 60 * 5, // 5 minutes
     gcTime: 1000 * 60 * 30, // 30 minutes

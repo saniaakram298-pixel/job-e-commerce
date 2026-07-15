@@ -4,6 +4,10 @@ import React, { useState } from 'react';
 import { Upload, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 
+
+
+
+
 interface ProductUploadFormProps {
   category: string;
   onProductAdded?: () => void;
@@ -11,6 +15,7 @@ interface ProductUploadFormProps {
 
 export default function ProductUploadForm({ category, onProductAdded }: ProductUploadFormProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     title: '',
@@ -50,94 +55,99 @@ export default function ProductUploadForm({ category, onProductAdded }: ProductU
     }));
   };
 
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setImagePreview(reader.result as string);
-        setFormData((prev) => ({
-          ...prev,
-          img: reader.result as string,
-        }));
-      };
-      reader.readAsDataURL(file);
-    }
-  };
+ const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const file = e.target.files?.[0];
 
-  const handleThumbnailImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
-    if (files.length === 0) return;
+  if (file) {
+    setImageFiles((prev) => [file, ...prev]);
 
-    Promise.all(
-      files.map(
-        (file) =>
-          new Promise<string>((resolve) => {
-            const reader = new FileReader();
-            reader.onloadend = () => resolve(reader.result as string);
-            reader.readAsDataURL(file);
-          })
-      )
-    ).then((results) => {
-      const validResults = results.filter(Boolean);
-      setThumbnailPreviews((prev) => [...prev, ...validResults]);
-      setFormData((prev) => ({
-        ...prev,
-        thumbnailImages: [...(prev.thumbnailImages || []), ...validResults],
-      }));
-    });
-  };
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setImagePreview(reader.result as string);
+    };
+    reader.readAsDataURL(file);
+  }
+};
+
+  const handleThumbnailImageChange = (
+  e: React.ChangeEvent<HTMLInputElement>
+) => {
+  const files = Array.from(e.target.files || []);
+
+  if (files.length === 0) return;
+
+  setImageFiles((prev) => [...prev, ...files]);
+
+  Promise.all(
+    files.map(
+      (file) =>
+        new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.readAsDataURL(file);
+        })
+    )
+  ).then((results) => {
+    setThumbnailPreviews((prev) => [...prev, ...results]);
+  });
+};
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!formData.title || !formData.price || !formData.img) {
-      toast.error('Please fill in all required fields');
-      return;
-    }
+   if (!formData.title || !formData.price || imageFiles.length === 0) {
+  toast.error('Please fill in all required fields');
+  return;
+}
 
     setLoading(true);
     try {
-      const galleryImages = (formData.thumbnailImages || []).filter(Boolean);
-      const allImages = [formData.img, ...galleryImages].filter(Boolean);
+      const stockValue = Number(formData.stock || 10);
+      const sizeEntries = formData.sizes
+        .split(',')
+        .map((size) => ({ size: size.trim(), stock: stockValue }))
+        .filter((entry) => entry.size);
+      const colorEntries = formData.colors
+        .split(',')
+        .map((color) => ({ color: color.trim(), stock: stockValue }))
+        .filter((entry) => entry.color);
 
-      const payload = {
-        name: formData.title,
-        description: formData.description,
-        price: Number(formData.price),
-        discountPrice: formData.discountPrice ? Number(formData.discountPrice) : null,
-        category: category,
-        collection: formData.collection,
-        images: allImages,
-        img: formData.img,
-        tags: [category],
-        sizes: formData.sizes
-          .split(',')
-          .map((size) => ({
-            size: size.trim(),
-            stock: Number(formData.stock),
-          }))
-          .filter((s) => s.size),
-        colors: formData.colors
-          .split(',')
-          .map((color) => ({
-            color: color.trim(),
-            stock: Number(formData.stock),
-          }))
-          .filter((c) => c.color),
-        active: true,
-        featured: false,
-        isBestSeller: formData.isBestSeller,
-        isTrending: formData.isTrending,
-      };
+      const safeSizeEntries = sizeEntries.length > 0 ? sizeEntries : [{ size: 'Free Size', stock: stockValue }];
+      const safeColorEntries = colorEntries.length > 0 ? colorEntries : [{ color: 'Black', stock: stockValue }];
+
+      const form = new FormData();
+
+      form.append('name', formData.title);
+      form.append('description', formData.description);
+      form.append('price', formData.price);
+      form.append('discountPrice', formData.discountPrice);
+      form.append('category', category);
+      form.append('collection', formData.collection);
+      form.append('sizes', JSON.stringify(safeSizeEntries));
+      form.append('colors', JSON.stringify(safeColorEntries));
+      form.append('tags', JSON.stringify([category]));
+      form.append('materials', JSON.stringify([]));
+      form.append('featured', 'false');
+      form.append('isBestSeller', String(formData.isBestSeller));
+      form.append('isTrending', String(formData.isTrending));
+      form.append('active', 'true');
+
+      const mainImageFile = imageFiles[0];
+      const thumbnailFiles = imageFiles.slice(1);
+
+      if (mainImageFile) {
+        form.append('mainImage', mainImageFile);
+      }
+
+      thumbnailFiles.forEach((file) => {
+        form.append('thumbnails', file);
+      });
 
       const response = await fetch('/api/products', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: form,
       });
-
-      const result = await response.json();
+      const result = await response.json().catch(() => ({}));
       if (response.ok) {
         toast.success('Product added successfully!');
         setFormData({

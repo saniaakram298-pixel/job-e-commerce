@@ -46,7 +46,11 @@ async function getNewArrivals(): Promise<Arrival[]> {
                     ? product.images.filter((img: string) => !img.startsWith('blob:'))
                     : [],
                 collectionName: product.collection || 'Uncategorized',
-                tags: Array.isArray(product.tags) ? product.tags : []
+                tags: Array.isArray(product.tags) ? product.tags : [],
+                averageRating: Number(product.averageRating ?? product.rating ?? 0),
+                totalReviews: Number(product.totalReviews ?? 0),
+                updatedAt: product.updatedAt || new Date().toISOString(),
+                createdAt: product.createdAt || new Date().toISOString(),
             } satisfies Arrival;
         });
 

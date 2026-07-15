@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { Heart } from 'lucide-react';
 import { formatCurrency } from '@/lib/price';
+import { ReviewStars } from '@/components/ReviewStars';
 
 interface ProductCardProps {
   _id: string;
@@ -15,6 +16,8 @@ interface ProductCardProps {
   category?: string;
   description?: string;
   stock?: number;
+  averageRating?: number;
+  totalReviews?: number;
 }
 
 export default function ProductCard({
@@ -26,7 +29,9 @@ export default function ProductCard({
   tags = [],
   category = 'Featured',
   description = '',
-  stock = 0
+  stock = 0,
+  averageRating = 0,
+  totalReviews = 0
 }: ProductCardProps) {
   const [isFavorite, setIsFavorite] = useState(false);
   const [imageError, setImageError] = useState(false);
@@ -124,8 +129,13 @@ export default function ProductCard({
           {description && (
             <p className="text-xs text-gray-600 mt-2 line-clamp-2">{description}</p>
           )}
+
+          <div className="mt-3 flex items-center gap-2">
+            <ReviewStars rating={averageRating} size="sm" />
+            <span className="text-xs text-gray-600">{averageRating > 0 ? averageRating.toFixed(1) : 'No ratings yet'}</span>
+            {totalReviews > 0 ? <span className="text-xs text-gray-500">({totalReviews})</span> : null}
+          </div>
           
-          {/* Yahan add karein (Line 113) */}
           <div className="mt-2">
             {stock > 0 ? (
               <span className="text-[10px] font-bold text-green-600 bg-green-50 px-2 py-0.5 rounded">

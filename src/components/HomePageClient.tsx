@@ -1,10 +1,10 @@
 "use client";
 
-import { startTransition, useEffect, useMemo, useState } from "react";
+import { startTransition, useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { Arrival } from "@/types";
-
+import EssentialsForSection from "@/components/EssentialsForSection";
 import Navbar from "@/components/Navbar";
 import Hero from "@/components/Hero";
 import TrustBadges from "@/components/TrustBadges";
@@ -29,21 +29,30 @@ const trustBadges = [
 
 interface HomePageClientProps {
   bestSellers: Arrival[];
+  isLoading?: boolean;
   categories?: Array<{
     slug: string;
     name: string;
     productCount?: number;
     image?: string;
+    products?: Array<{
+      id: string;
+      name: string;
+      image?: string;
+      price?: string;
+    }>;
   }>;
 }
 
 export default function HomePageClient({
   bestSellers,
   categories = [],
+  isLoading = false,
 }: HomePageClientProps) {
   const [scrolled, setScrolled] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [isNavigating, setIsNavigating] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
   const router = useRouter();
 
   // ✅ SIMPLE HERO (no product dependency)
@@ -70,12 +79,20 @@ export default function HomePageClient({
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
-  // ✅ SIMPLE CATEGORY CARDS (FIXED)
-  const collectionCards = categories.map((category) => ({
-    id: category.slug,
-    name: category.name,
-    image: category.image || "",
-  }));
+  // ✅ SIMPLE CATEGORY CARDS - Map categories with products for slider display
+  const collectionCards = useMemo(
+    () =>
+      categories.map((category) => {
+        const hasProducts = category.products && category.products.length > 0;
+        return {
+          id: category.slug,
+          name: category.name,
+          image: category.image || "",
+          products: hasProducts ? category.products : [],
+        };
+      }),
+    [categories]
+  );
 
   const handleCategoryClick = (slug: string) => {
     setIsNavigating(true);
@@ -93,6 +110,12 @@ export default function HomePageClient({
       <Navbar scrolled={scrolled} />
       <Hero data={heroData} />
 
+      {isLoading && (
+        <div className="mx-auto mb-4 flex max-w-[1440px] items-center justify-center px-6 text-sm text-slate-500 md:px-12">
+          Loading latest collections...
+        </div>
+      )}
+
       <CategorySlider
         categories={collectionCards}
         onCategorySelect={handleCategoryClick}
@@ -108,15 +131,16 @@ export default function HomePageClient({
       )}
 
       {/* ✅ BEST SELLERS */}
-      <section className="max-w-[1440px] mx-auto px-6 md:px-12 py-8">
-        <BestSellers arrivals={bestSellers} />
-      </section>
+      
 
       {/* ✅ TRENDING DRESSES */}
-      <TrendingDresses />
+      <TrendingDresses key={refreshKey} />
+      <BestSellers arrivals={bestSellers} />
 
       {/* ✅ STATIC 2026 VIDEO */}
       <StaticVideoSection />
+
+      <EssentialsForSection />
 
       {/* ✅ OTHER SECTIONS */}
       <main className="max-w-[1440px] mx-auto px-6 md:px-12 space-y-20 py-12">
