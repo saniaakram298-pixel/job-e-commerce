@@ -46,12 +46,7 @@ export default function CollectionPageClient({
     title: 'Modern Elegance',
     buttonText: 'Go to My Account',
     imagePath: '/images/hero2.webp',
-    images: [
-      '/images/hero1.webp',
-      'https://images.unsplash.com/photo-1529139574466-a303027c1d8b?auto=format&fit=crop&w=1600&q=80&fm=webp',
-      'https://images.unsplash.com/photo-1512436991641-6745cdb1723f?auto=format&fit=crop&w=1600&q=80&fm=webp',
-      'https://images.unsplash.com/photo-1483985988355-763728e1935b?auto=format&fit=crop&w=1600&q=80&fm=webp',
-    ],
+ 
     href: '/account',
     subtitle: 'Discover timeless pieces curated for your wardrobe.',
   }), []);

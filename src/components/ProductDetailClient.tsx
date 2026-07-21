@@ -2,12 +2,14 @@
 
 import React, { useState } from 'react';
 import { getTotalStock } from '@/lib/productStock';
-import Link from 'next/link';
+
+import { useRouter } from "next/navigation";
 import { Product, Arrival } from '@/types';
 import { useCart } from '@/context/CartContext';
 import { buildGuestOrderPayload } from '@/lib/orderPayloads';
 import { toastManager } from '@/lib/toast';
 import ProductReviews from '@/components/ProductReviews';
+import router from 'next/dist/client/router';
 
 interface ProductDetailClientProps {
   product: Partial<Product> | null;
@@ -188,12 +190,28 @@ export default function ProductDetailClient({ product, isOpen, onClose }: Produc
   return (
     <div className="min-h-screen bg-[#fcf9f8] text-[#1c1b1b]">
       <nav className="p-8 flex justify-between items-center border-b border-stone-200 sticky top-0 bg-[#fcf9f8]/90 backdrop-blur-md z-50">
-        <Link href="/new-arrivals" className="text-[10px] font-bold tracking-[0.3em] uppercase hover:opacity-50 transition-all">
-          ← Back to Collection
-        </Link>
-        <div className="text-xl font-serif italic font-bold tracking-tighter">THE ATELIER</div>
-        <div className="w-20" />
-      </nav>
+      
+      {/* BACK BUTTON */}
+     <button
+  onClick={() => {
+    if (window.history.length > 1) {
+      window.history.back();
+    } else {
+      window.location.href = "/";
+    }
+  }}
+  className="text-[10px] font-bold tracking-[0.3em] uppercase hover:opacity-50 transition-all"
+>
+  ← Back
+</button>
+
+      {/* LOGO */}
+      <div className="text-xl font-serif italic font-bold tracking-tighter">
+        THE ATELIER
+      </div>
+
+      <div className="w-20" />
+    </nav>
 
       <main className="max-w-[1400px] mx-auto px-8 py-16 grid grid-cols-1 lg:grid-cols-2 gap-20">
         <div className="flex flex-col gap-6">

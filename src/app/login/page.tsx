@@ -63,11 +63,7 @@ export default function LoginPage() {
         </div>
 
         {/* Test Credentials Info */}
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-600">
-          <p className="font-semibold">Test Credentials:</p>
-          <p>Email: admin@theatelier.com</p>
-          <p>Password: admin123456</p>
-        </div>
+      
 
         <form className="space-y-6" onSubmit={handleLogin}>
           <div className="space-y-4">
