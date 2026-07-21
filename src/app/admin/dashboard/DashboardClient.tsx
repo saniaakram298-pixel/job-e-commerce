@@ -466,7 +466,7 @@ export default function AtelierDashboardClient({ collections: initialCollections
   />
 
   {/* Main Content */}
-  <main className="flex-1 md:ml-64 overflow-y-auto p-2 xs:p-3 sm:p-4 md:p-6 lg:p-8 xl:p-12">
+<main className="flex-1 md:ml-50 overflow-y-auto px-3 py-4">
     <div className="mb-4 md:hidden">
       <button
         type="button"
