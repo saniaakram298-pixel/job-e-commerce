@@ -337,8 +337,9 @@ export default function AtelierDashboardClient({
 
   return (
     <div
-      className={`flex h-screen font-sans transition-colors duration-500 ${darkMode ? 'bg-[#0A0A0A] text-gray-200' : 'bg-[#F9F9F9] text-gray-900'
-        }`}
+      className={`flex h-screen w-full overflow-hidden font-sans transition-colors duration-500 ${
+  darkMode ? 'bg-[#0A0A0A] text-gray-200' : 'bg-[#F9F9F9] text-gray-900'
+}`}
     >
       <AdminSidebar
         activeTab={activeTab}

@@ -184,27 +184,32 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
 
       {/* Logout + Home Buttons */}
       <div className="space-y-4">
-        <div className="flex items-center gap-3">
-          <Link
-            href="/"
-            onClick={onClose}
-            className={`flex-1 rounded-xl border px-4 py-3 text-sm font-bold uppercase tracking-[0.2em] transition inline-flex items-center justify-center gap-2 ${
-              darkMode
-                ? 'border-neutral-800 bg-[#E5A93A]/10 text-[#E5A93A] hover:bg-[#E5A93A]/20'
-                : 'border-neutral-200 bg-[#E5A93A]/10 text-[#8C6219] hover:bg-[#E5A93A]/20'
-            }`}
-          >
-            <HomeIcon className="w-4 h-4" />
-            Home
-          </Link>
-          <button
-            onClick={onLogout}
-            className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm font-bold uppercase tracking-[0.2em] text-red-600 transition hover:bg-red-500/20 hover:border-red-500/50 flex items-center justify-center gap-2"
-          >
-            <LogOut className="w-4 h-4" />
-            Logout
-          </button>
-        </div>
+       <div className="flex items-center gap-3">
+
+  {/* HOME BUTTON */}
+  <Link
+    href="/"
+    onClick={onClose}
+    className={`w-1/2 rounded-xl border px-3 py-3 text-xs font-bold uppercase tracking-[0.2em] transition flex items-center justify-center gap-2 ${
+      darkMode
+        ? 'border-neutral-800 bg-[#E5A93A]/10 text-[#E5A93A] hover:bg-[#E5A93A]/20'
+        : 'border-neutral-200 bg-[#E5A93A]/10 text-[#8C6219] hover:bg-[#E5A93A]/20'
+    }`}
+  >
+    <HomeIcon className="w-4 h-4" />
+    Home
+  </Link>
+
+  {/* LOGOUT BUTTON */}
+  <button
+    onClick={onLogout}
+    className="w-1/2 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-3 text-xs font-bold uppercase tracking-[0.2em] text-red-600 transition hover:bg-red-500/20 hover:border-red-500/50 flex items-center justify-center gap-2"
+  >
+    <LogOut className="w-4 h-4" />
+    Logout
+  </button>
+
+</div>
       </div>
     </aside>
   </>
