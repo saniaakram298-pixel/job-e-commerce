@@ -51,7 +51,7 @@ function EssentialsForSection() {
           {/* LEFT - LARGE IMAGE */}
 <div className="relative h-[500px] md:h-[700px] lg:h-full">
             <Image
-              src="/images/A luxurious full-length burgundy gown featuring intricate lace detailing and flowing cape sleeves, paired beautifully with matching heels and a sparkling clutch for a refined evening look_.jpg"
+              src="/images/3.webp"
               alt="Essential Forms Main"
               fill
               className="object-cover group-hover:scale-105 transition-transform duration-500"

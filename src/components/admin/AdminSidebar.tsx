@@ -3,8 +3,8 @@
 import React from 'react';
 import Link from 'next/link';
 import {
-  LayoutGrid, Package, Layers, Truck, LogOut, MessageSquare, Activity, 
-  ChevronDown, TagIcon
+  LayoutGrid, Package, Layers, Truck, LogOut, MessageSquare, Activity,
+  ChevronDown, TagIcon, Home as HomeIcon,
 } from 'lucide-react';
 
 interface AdminSidebarProps {
@@ -59,11 +59,19 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
     if (onCategorySelect) {
       onCategorySelect(categoryId);
     }
+    onClose();
   };
 
   return (
-    <aside
-      className={`fixed inset-y-0 left-0 z-40 w-64 ${
+    <>
+      {isSidebarOpen && (
+        <div
+          onClick={onClose}
+          className="fixed inset-0 z-30 bg-black/30 lg:hidden"
+        />
+      )}
+      <aside
+        className={`fixed inset-y-0 left-0 z-40 w-64 ${
         darkMode ? 'bg-[#0F0F0F] border-neutral-900' : 'bg-white border-neutral-200'
       } border-r transform transition-transform duration-300 lg:relative lg:translate-x-0 ${
         isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
@@ -91,7 +99,10 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
           {mainMenuItems.map((tab) => (
             <button
               key={tab.id}
-              onClick={() => onTabChange(tab.id)}
+              onClick={() => {
+                onTabChange(tab.id);
+                onClose();
+              }}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all ${
                 activeTab === tab.id
                   ? darkMode
@@ -110,7 +121,10 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
         <div className="border-t border-neutral-200 dark:border-neutral-800 pt-4 space-y-2">
           {/* AnalyticDashboard Button */}
           <button
-            onClick={() => onTabChange('home')}
+            onClick={() => {
+              onTabChange('home');
+              onClose();
+            }}
             className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all ${
               activeTab === 'home'
                 ? darkMode
@@ -168,16 +182,30 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
         </div>
       </div>
 
-      {/* Logout Button */}
+      {/* Logout + Home Buttons */}
       <div className="space-y-4">
-        <button
-          onClick={onLogout}
-          className="w-full rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm font-bold uppercase tracking-[0.2em] text-red-600 transition hover:bg-red-500/20 hover:border-red-500/50 flex items-center justify-center gap-2"
-        >
-          <LogOut className="w-4 h-4" />
-          Logout
-        </button>
+        <div className="flex items-center gap-3">
+          <Link
+            href="/"
+            onClick={onClose}
+            className={`flex-1 rounded-xl border px-4 py-3 text-sm font-bold uppercase tracking-[0.2em] transition inline-flex items-center justify-center gap-2 ${
+              darkMode
+                ? 'border-neutral-800 bg-[#E5A93A]/10 text-[#E5A93A] hover:bg-[#E5A93A]/20'
+                : 'border-neutral-200 bg-[#E5A93A]/10 text-[#8C6219] hover:bg-[#E5A93A]/20'
+            }`}
+          >
+            <HomeIcon className="w-4 h-4" />
+            Home
+          </Link>
+          <button
+            onClick={onLogout}
+            className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm font-bold uppercase tracking-[0.2em] text-red-600 transition hover:bg-red-500/20 hover:border-red-500/50 flex items-center justify-center gap-2"
+          >
+            <LogOut className="w-4 h-4" />
+            Logout
+          </button>
+        </div>
       </div>
     </aside>
-  );
-};
+  </>
+)}
