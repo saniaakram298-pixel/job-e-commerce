@@ -90,9 +90,7 @@ export function normalizeGuestOrderPayload(
       })
     : [];
 
-  const orderItems = normalizedItems.filter(
-    (item) => Boolean(item.productId) && Number(item.quantity) > 0,
-  );
+  const orderItems = normalizedItems;
 
   const computedTotalPrice =
     typeof safeBody.totalPrice === 'number'

@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import { connectDB } from '@/lib/mongodb';
-import { createErrorResponse, createSuccessResponse, getAuthToken } from '@/lib/response';
+import { createErrorResponse, createSuccessResponse, getAuthToken, requireAdminUser } from '@/lib/response';
 
 interface ActivityLog {
   _id?: string;
@@ -21,6 +21,9 @@ let activityLogs: ActivityLog[] = [];
 
 export async function GET(request: NextRequest) {
   try {
+    const authorization = await requireAdminUser(request);
+    if (authorization.response) return authorization.response;
+
     const token = getAuthToken(request);
     if (!token) {
       return createErrorResponse('Unauthorized', 401);
@@ -42,6 +45,9 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const authorization = await requireAdminUser(request);
+    if (authorization.response) return authorization.response;
+
     const token = getAuthToken(request);
     if (!token) {
       return createErrorResponse('Unauthorized', 401);

@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import { connectDB } from '@/lib/mongodb';
 import { Review, syncProductReviewStats } from '@/models/Review';
-import { createErrorResponse, createSuccessResponse, getAuthToken, getUserIdFromToken } from '@/lib/response';
+import { createErrorResponse, createSuccessResponse, getAuthToken, getUserIdFromToken, requireAdminUser } from '@/lib/response';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,6 +10,9 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const authorization = await requireAdminUser(request);
+    if (authorization.response) return authorization.response;
+
     const token = getAuthToken(request);
     if (!token) {
       return createErrorResponse('Unauthorized', 401);

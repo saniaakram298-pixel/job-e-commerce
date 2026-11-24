@@ -32,6 +32,7 @@ export interface IOrder {
   };
   paymentMethod: string;
   paymentStatus: 'pending' | 'completed' | 'failed';
+  inventoryReserved?: boolean;
   orderStatus: 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
   trackingNumber?: string;
   notes?: string;
@@ -101,6 +102,10 @@ const orderSchema = new Schema<IOrder>(
       type: String,
       enum: ['pending', 'completed', 'failed'],
       default: 'pending',
+    },
+    inventoryReserved: {
+      type: Boolean,
+      default: false,
     },
     orderStatus: {
       type: String,

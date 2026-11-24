@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { saveUploadedFile, deleteUploadedFile, UPLOAD_CONFIG } from '@/lib/uploadHandler';
 import { connectDB } from '@/lib/mongodb';
 import { Product } from '@/models/Product';
-import { createErrorResponse, createSuccessResponse } from '@/lib/response';
+import { createErrorResponse, createSuccessResponse, requireAdminUser } from '@/lib/response';
 export const dynamic = 'force-dynamic';
 
 /**
@@ -42,6 +42,9 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
+    const authorization = await requireAdminUser(request);
+    if (authorization.response) return authorization.response;
+
     const formData = await request.formData();
     const files = formData.getAll('file') as File[];
 
@@ -98,6 +101,9 @@ export async function POST(request: NextRequest) {
  */
 export async function DELETE(request: NextRequest) {
   try {
+    const authorization = await requireAdminUser(request);
+    if (authorization.response) return authorization.response;
+
     const { searchParams } = new URL(request.url);
     const filename = searchParams.get('filename');
 

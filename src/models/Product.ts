@@ -8,6 +8,7 @@ export interface IProduct {
   description: string;
   price: number;
   discountPrice?: number;
+  stock?: number;
   collection: string;
   category: ProductCategory;
   subcategory?: string;
@@ -56,6 +57,10 @@ const productSchema = new Schema<IProduct>(
       min: 0,
     },
     discountPrice: {
+      type: Number,
+      min: 0,
+    },
+    stock: {
       type: Number,
       min: 0,
     },

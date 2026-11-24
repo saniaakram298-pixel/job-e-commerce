@@ -4,6 +4,7 @@ import { CartProvider } from '@/context/CartContext'; // Import context
 import GlobalSanitizer from '@/components/GlobalSanitizer';
 import ReactQueryProvider from '@/components/ReactQueryProvider';
 import { ToastContainer } from '@/components/ToastContainer';
+import AuthSessionProvider from '@/components/AuthSessionProvider';
 
 export const metadata = {
   title: 'The Atelier - Luxury Fashion E-commerce',
@@ -35,17 +36,17 @@ export default function RootLayout({
         <ToastContainer />
         
         {/* CartProvider ko yahan wrap kar diya hai */}
-        <CartProvider>
-          <ReactQueryProvider>
-            <GlobalSanitizer />
-            
-            {/* Safe Zone Wrapper: Yeh div kisi bhi page content (children) ko mobile layout se bahar push nahi hone degi */}
-            <div className="w-full max-w-full overflow-x-hidden relative">
-              {children}
-            </div>
+        <AuthSessionProvider>
+          <CartProvider>
+            <ReactQueryProvider>
+              <GlobalSanitizer />
 
-          </ReactQueryProvider>
-        </CartProvider>
+              <div className="w-full max-w-full overflow-x-hidden relative">
+                {children}
+              </div>
+            </ReactQueryProvider>
+          </CartProvider>
+        </AuthSessionProvider>
       </body>
     </html>
   );

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { connectDB } from '@/lib/mongodb';
 import { Collection } from '@/models/Collection';
+import { requireAdminUser } from '@/lib/response';
 
 export const dynamic = 'force-dynamic';
 
@@ -77,6 +78,9 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const authorization = await requireAdminUser(request);
+    if (authorization.response) return authorization.response;
+
     await connectDB();
 
     const body = await request.json();

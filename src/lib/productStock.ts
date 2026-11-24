@@ -7,6 +7,7 @@ export interface ProductVariantStockEntry {
 export interface ProductStockLike {
   sizes?: ProductVariantStockEntry[];
   colors?: ProductVariantStockEntry[];
+  stock?: number | string | null;
 }
 
 export const normalizeNumericStock = (value: unknown, fallback = 0) => {
@@ -53,5 +54,10 @@ export const normalizeProductVariants = (
   };
 };
 
-export const getTotalStock = (product?: ProductStockLike | null) =>
-  (product?.sizes ?? []).reduce((total, entry) => total + normalizeNumericStock(entry?.stock), 0);
+export const getTotalStock = (product?: ProductStockLike | null) => {
+  const variants = product?.sizes?.length ? product.sizes : product?.colors;
+  if (variants?.length) {
+    return variants.reduce((total, entry) => total + normalizeNumericStock(entry?.stock), 0);
+  }
+  return normalizeNumericStock(product?.stock);
+};

@@ -63,6 +63,33 @@ NEXT_PUBLIC_API_URL=http://localhost:3000/api
 5. Get your connection string
 6. Replace `username:password` in your `.env.local`
 
+### MongoDB transactions for checkout
+
+Order creation reserves inventory and writes the order in a MongoDB transaction. Transactions require MongoDB Atlas or a local MongoDB replica set; a standalone `mongod` instance is not sufficient. Checkout returns a clear service error if the database does not support transactions rather than creating an order with partially updated stock.
+
+For local development on Windows, run MongoDB with replica-set mode:
+
+```powershell
+New-Item -ItemType Directory -Force C:\data\db
+mongod --replSet rs0 --dbpath C:\data\db
+```
+
+In a second terminal, initialize the single-node replica set once:
+
+```powershell
+mongosh "mongodb://127.0.0.1:27017/admin" --eval "rs.initiate()"
+```
+
+Set the local connection string in `.env.local`:
+
+```text
+MONGODB_URI=mongodb://127.0.0.1:27017/the-atelier?replicaSet=rs0
+```
+
+For local container/host combinations, configure the replica-set member hostname so it is reachable from the Next.js process. Do not disable transaction use as a workaround.
+
+Products with selectable sizes or colors use the stock recorded on those variants. Products without variants use the product-level `stock` field. Backfill stock for existing variantless products before enabling checkout for them; missing stock is treated as unavailable.
+
 ### 4. Run Development Server
 
 ```bash

@@ -8,7 +8,7 @@ import { useToast } from '@/hooks/useToast';
 
 export default function LoginPage() {
   const router = useRouter();
-  const { login, isLoading, error, user } = useAuthStore();
+  const { login, isLoading, user } = useAuthStore();
   const { success: showSuccess, error: showError } = useToast();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -16,10 +16,10 @@ export default function LoginPage() {
 
   // Redirect to dashboard if already logged in
   useEffect(() => {
-   if (user && !isRedirecting) {
-  setIsRedirecting(true);
-  router.push('/admin/dashboard');
-}
+    if (user && !isRedirecting) {
+      setIsRedirecting(true);
+      router.push(user.role === 'admin' ? '/admin/dashboard' : '/account');
+    }
   }, [user, router, isRedirecting]);
 
   const handleLogin = async (e: { preventDefault: () => void }) => {
@@ -34,13 +34,16 @@ export default function LoginPage() {
 
       // Set redirecting state
       setIsRedirecting(true);
+      const destination = useAuthStore.getState().user?.role === 'admin'
+        ? '/admin/dashboard'
+        : '/account';
 
       // Prefetch dashboard route for faster navigation
-      router.prefetch('/admin/dashboard');
+      router.prefetch(destination);
 
       // Small delay to ensure state is updated before redirect
       setTimeout(() => {
-        router.push('/admin/dashboard');
+        router.push(destination);
       }, 100);
     } catch (err) {
       showError((err as Error).message || 'Login failed. Please try again.');

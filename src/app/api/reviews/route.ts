@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { connectDB } from '@/lib/mongodb';
 import { Review, syncProductReviewStats } from '@/models/Review';
 import { Product } from '@/models/Product';
-import { createErrorResponse, createSuccessResponse, getAuthToken, getUserIdFromToken } from '@/lib/response';
+import { createErrorResponse, createSuccessResponse, requireAuthenticatedUser } from '@/lib/response';
 import mongoose from 'mongoose';
 
 export const dynamic = 'force-dynamic';
@@ -40,15 +40,9 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const token = getAuthToken(request);
-    if (!token) {
-      return createErrorResponse('Authentication required', 401);
-    }
-
-    const userId = getUserIdFromToken(token);
-    if (!userId) {
-      return createErrorResponse('Invalid authentication token', 401);
-    }
+    const authentication = await requireAuthenticatedUser(request);
+    if (authentication.response) return authentication.response;
+    const userId = authentication.user._id.toString();
 
     const body = await request.json();
     const productId = String(body.productId || '').trim();

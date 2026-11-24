@@ -2,8 +2,6 @@
  * Client-side API utilities for making authenticated requests
  */
 
-import { useAuthStore } from '@/hooks/useAuth';
-
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000/api';
 
 interface RequestOptions extends RequestInit {
@@ -16,33 +14,25 @@ export async function apiRequest<T>(
 ): Promise<T> {
   const { requiresAuth = true, ...fetchOptions } = options;
 
-  let headers: HeadersInit = {
+  const headers: HeadersInit = {
     'Content-Type': 'application/json',
     ...fetchOptions.headers,
   };
 
-  // Add auth token if needed
-  if (requiresAuth) {
-    const { token } = useAuthStore.getState();
-    if (token) {
-      headers = {
-        ...headers,
-        Authorization: `Bearer ${token}`,
-      };
-    } else {
-      throw new Error('Authentication required');
-    }
-  }
-
   const response = await fetch(`${API_URL}${endpoint}`, {
     ...fetchOptions,
     headers,
+    credentials: 'include',
   });
 
   const data = await response.json();
 
   if (!response.ok) {
     throw new Error(data.message || 'API request failed');
+  }
+
+  if (requiresAuth && response.status === 401) {
+    throw new Error('Authentication required');
   }
 
   return data;

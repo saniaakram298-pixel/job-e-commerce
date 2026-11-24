@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { connectDB } from '@/lib/mongodb';
 import { Subscriber } from '@/models/Subscriber';
+import { requireAdminUser } from '@/lib/response';
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest) {
@@ -57,13 +58,8 @@ export async function POST(req: NextRequest) {
 
 export async function GET(req: NextRequest) {
   try {
-    const session = req.headers.get('authorization')?.split(' ')[1];
-    if (!session) {
-      return NextResponse.json(
-        { success: false, message: 'Unauthorized' },
-        { status: 401 }
-      );
-    }
+    const authorization = await requireAdminUser(req);
+    if (authorization.response) return authorization.response;
 
     await connectDB();
     const subscribers = await Subscriber.find({ active: true }).exec();
@@ -90,6 +86,9 @@ export async function GET(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   try {
+    const authorization = await requireAdminUser(req);
+    if (authorization.response) return authorization.response;
+
     await connectDB();
     const body = await req.json();
     const { email } = body;

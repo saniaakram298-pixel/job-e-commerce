@@ -120,7 +120,7 @@ export default function AtelierDashboardClient({
   initialError,
 }: DashboardClientProps) {
   const router = useRouter();
-  const { logout, user, token } = useAuthStore();
+  const { logout, user } = useAuthStore();
 
   // UI State
   const [activeTab, setActiveTab] = useState('overview');
@@ -164,7 +164,7 @@ export default function AtelierDashboardClient({
     staleTime: 1000 * 30,
     refetchOnWindowFocus: false,
     retry: 2,
-    enabled: Boolean(token),
+    enabled: Boolean(user),
   });
   const { data: adminStats } = useQuery<{
   totalRevenue: number;
@@ -176,9 +176,6 @@ export default function AtelierDashboardClient({
   queryFn: async () => {
     const res = await fetch('/api/admin/stats', {
       cache: 'no-store',
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
     });
 
     if (!res.ok) throw new Error('Failed to fetch stats');
@@ -186,7 +183,7 @@ export default function AtelierDashboardClient({
     const data = await res.json();
     return data.data;
   },
-  enabled: Boolean(token),
+  enabled: Boolean(user),
   staleTime: 1000 * 30,
 });
 
@@ -200,7 +197,7 @@ export default function AtelierDashboardClient({
     },
     staleTime: 1000 * 30,
     refetchOnWindowFocus: false,
-    enabled: Boolean(token),
+    enabled: Boolean(user),
   });
 
   // OPTIMIZED: Categories Query - Lazy loaded in background
@@ -283,9 +280,13 @@ export default function AtelierDashboardClient({
     ];
   }, [collections, orders, normalizedSearch, userEmail, userName]);
 
-  const handleLogout = () => {
-    logout();
-    window.location.href = '/login';
+  const handleLogout = async () => {
+    try {
+      await logout();
+      window.location.href = '/login';
+    } catch (logoutError) {
+      console.error('Logout failed:', logoutError);
+    }
   };
 
   const handleCategorySelect = (categoryName: string) => {

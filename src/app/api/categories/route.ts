@@ -3,6 +3,7 @@ import { Category } from '@/models/Category';
 import { NextRequest, NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
 import { getSharedCategoryCatalog } from '@/lib/categoryCatalog';
+import { requireAdminUser } from '@/lib/response';
 
 export const revalidate = 60;
 
@@ -25,9 +26,7 @@ export async function GET(request: NextRequest) {
   try {
     await connectDB();
 
-
     const formattedCategories = await getSharedCategoryCatalog();
-    console.log('[api/categories] categories', formattedCategories);
 
     return NextResponse.json(
       {
@@ -53,6 +52,9 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const authorization = await requireAdminUser(request);
+    if (authorization.response) return authorization.response;
+
     await connectDB();
 
     const body = await request.json();

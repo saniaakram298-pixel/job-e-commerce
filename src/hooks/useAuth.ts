@@ -1,116 +1,160 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
 import { User } from '@/types/auth';
 
 interface AuthStore {
   user: User | null;
-  token: string | null;
   isLoading: boolean;
+  isInitialized: boolean;
   error: string | null;
-  login: (email?: string, password?: string) => Promise<void>;
+  initialize: () => Promise<void>;
+  refreshSession: () => Promise<User | null>;
+  login: (email: string, password: string) => Promise<void>;
   signup: (email: string, password: string, firstName: string, lastName: string) => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
   clearError: () => void;
-  fillAdminCredentials: () => { email: string; password: string; firstName: string; lastName: string };
 }
 
-export const useAuthStore = create<AuthStore>()(
-  persist(
-    (set, get) => ({
-      user: null,
-      token: null,
-      isLoading: false,
-      error: null,
+interface AuthApiResponse {
+  success: boolean;
+  message?: string;
+  data?: { user?: User };
+}
 
-      // Default Admin Credentials Object
-      fillAdminCredentials: () => ({
-        email: 'admin@theatelier.com',
-        password: 'admin123456',
-        firstName: 'Admin',
-        lastName: 'User',
-      }),
+export const useAuthStore = create<AuthStore>((set, get) => ({
+  user: null,
+  isLoading: false,
+  isInitialized: false,
+  error: null,
 
-      login: async (email?: string, password?: string) => {
-        // Agar credentials provide nahi kiye gaye hain toh predefined Admin credentials use honge
-        const adminData = get().fillAdminCredentials();
-        const finalEmail = email || adminData.email;
-        const finalPassword = password || adminData.password;
-
-        set({ isLoading: true, error: null });
+  initialize: async () => {
+    if (get().isInitialized || get().isLoading) return;
+    set({ isLoading: true, error: null });
+    try {
+      if (typeof window !== 'undefined') {
         try {
-          const response = await fetch('/api/auth/login', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email: finalEmail, password: finalPassword }),
-          });
-
-          const data = await response.json();
-
-          if (!response.ok) {
-            throw new Error(data.message || 'Login failed');
-          }
-
-          set({
-            user: data.data.user,
-            token: data.data.token,
-            isLoading: false,
-          });
-        } catch (error) {
-          set({
-            error: (error as Error).message,
-            isLoading: false,
-          });
-          throw error;
+          window.localStorage.removeItem('auth-store');
+        } catch (storageError) {
+          console.warn('Unable to remove a legacy browser auth store:', storageError);
         }
-      },
+      }
 
-      signup: async (email: string, password: string, firstName: string, lastName: string) => {
-        set({ isLoading: true, error: null });
-        try {
-          const response = await fetch('/api/auth/signup', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email, password, firstName, lastName }),
-          });
+      const response = await fetch('/api/auth/session', {
+        method: 'GET',
+        credentials: 'same-origin',
+        cache: 'no-store',
+      });
+      if (response.status === 401) {
+        set({ user: null });
+        return;
+      }
 
-          const data = await response.json();
-
-          if (!response.ok) {
-            throw new Error(data.message || 'Signup failed');
-          }
-
-          set({
-            user: data.data.user,
-            token: data.data.token,
-            isLoading: false,
-          });
-        } catch (error) {
-          set({
-            error: (error as Error).message,
-            isLoading: false,
-          });
-          throw error;
-        }
-      },
-
-      logout: () => {
-        set({
-          user: null,
-          token: null,
-          error: null,
-        });
-      },
-
-      clearError: () => {
-        set({ error: null });
-      },
-    }),
-    {
-      name: 'auth-store',
-      partialize: (state) => ({
-        user: state.user,
-        token: state.token,
-      }),
+      const data = (await response.json()) as AuthApiResponse;
+      if (!response.ok || !data.data?.user) {
+        throw new Error(data.message || 'Unable to verify your session');
+      }
+      set({ user: data.data.user });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to verify your session';
+      set({ user: null, error: message });
+    } finally {
+      set({ isLoading: false, isInitialized: true });
     }
-  )
-);
+  },
+
+  refreshSession: async () => {
+    set({ isLoading: true, error: null });
+    try {
+      const response = await fetch('/api/auth/session', {
+        method: 'GET',
+        credentials: 'same-origin',
+        cache: 'no-store',
+      });
+      if (response.status === 401) {
+        set({ user: null, isInitialized: true });
+        return null;
+      }
+
+      const data = (await response.json()) as AuthApiResponse;
+      if (!response.ok || !data.data?.user) {
+        throw new Error(data.message || 'Unable to verify your session');
+      }
+      set({ user: data.data.user, isInitialized: true });
+      return data.data.user;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to verify your session';
+      set({ user: null, error: message });
+      throw error;
+    } finally {
+      set({ isLoading: false, isInitialized: true });
+    }
+  },
+
+  login: async (email, password) => {
+    set({ isLoading: true, error: null });
+    try {
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+      const data = (await response.json()) as AuthApiResponse;
+      if (!response.ok || !data.data?.user) {
+        throw new Error(data.message || 'Login failed');
+      }
+      set({ user: data.data.user, isInitialized: true });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Login failed';
+      set({ error: message });
+      throw error;
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
+  signup: async (email, password, firstName, lastName) => {
+    set({ isLoading: true, error: null });
+    try {
+      const response = await fetch('/api/auth/signup', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password, firstName, lastName }),
+      });
+      const data = (await response.json()) as AuthApiResponse;
+      if (!response.ok || !data.data?.user) {
+        throw new Error(data.message || 'Signup failed');
+      }
+      set({ user: data.data.user, isInitialized: true });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Signup failed';
+      set({ error: message });
+      throw error;
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
+  logout: async () => {
+    set({ isLoading: true, error: null });
+    try {
+      const response = await fetch('/api/auth/logout', {
+        method: 'POST',
+        credentials: 'same-origin',
+      });
+      if (!response.ok) {
+        const data = (await response.json()) as AuthApiResponse;
+        throw new Error(data.message || 'Unable to end your session');
+      }
+      set({ user: null, isInitialized: true });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unable to end your session';
+      set({ error: message });
+      throw error;
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
+  clearError: () => set({ error: null }),
+}));

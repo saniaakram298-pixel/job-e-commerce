@@ -1,6 +1,6 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { connectDB } from '@/lib/mongodb';
-import { hashPassword, comparePasswords, generateToken } from '@/lib/auth';
+import { AUTH_COOKIE_NAME, generateToken, getAuthCookieOptions, hashPassword } from '@/lib/auth';
 import { User } from '@/models/User';
 import { createErrorResponse, createSuccessResponse } from '@/lib/response';
 export const dynamic = 'force-dynamic';
@@ -48,14 +48,13 @@ export async function POST(request: NextRequest) {
       role: user.role,
     };
 
-    return createSuccessResponse(
-      {
-        token,
-        user: userData,
-      },
+    const response = createSuccessResponse(
+      { user: userData },
       'User registered successfully',
       201
     );
+    response.cookies.set(AUTH_COOKIE_NAME, token, getAuthCookieOptions());
+    return response;
   } catch (error) {
     console.error('Signup error:', error);
     return createErrorResponse('Internal server error', 500);

@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import { connectDB } from '@/lib/mongodb';
 import { Product } from '@/models/Product';
-import { createErrorResponse, createSuccessResponse } from '@/lib/response';
+import { createErrorResponse, createSuccessResponse, requireAdminUser } from '@/lib/response';
 import mongoose from 'mongoose';
 import { revalidatePath } from 'next/cache';
 import { normalizeProductVariants } from '@/lib/productStock';
@@ -13,6 +13,9 @@ export async function GET(
     { params }: { params: Promise<{ id: string }> }
 ) {
     try {
+        const authorization = await requireAdminUser(request);
+        if (authorization.response) return authorization.response;
+
         await connectDB();
 
         // Pehle params ko await karein
@@ -44,7 +47,11 @@ export async function PUT(
         }
 
         if (body.stock !== undefined) {
-            return createErrorResponse('The stock field is no longer supported. Use sizes[].stock and colors[].stock instead.', 400);
+            const stock = Number(body.stock);
+            if (!Number.isSafeInteger(stock) || stock < 0) {
+                return createErrorResponse('Stock must be a non-negative whole number', 400);
+            }
+            body.stock = stock;
         }
 
         const sanitizedBody = { ...body };
@@ -87,6 +94,9 @@ export async function DELETE(
     { params }: { params: Promise<{ id: string }> }
 ) {
     try {
+        const authorization = await requireAdminUser(request);
+        if (authorization.response) return authorization.response;
+
         await connectDB();
         const { id } = await params;
 

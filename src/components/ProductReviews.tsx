@@ -21,7 +21,7 @@ interface ReviewItem {
 }
 
 export default function ProductReviews({ productId, productName }: ProductReviewsProps) {
-  const { user, token } = useAuthStore();
+  const { user, refreshSession } = useAuthStore();
   const router = useRouter();
   const [reviews, setReviews] = useState<ReviewItem[]>([]);
   const [averageRating, setAverageRating] = useState(0);
@@ -72,21 +72,24 @@ export default function ProductReviews({ productId, productName }: ProductReview
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!token) {
-      router.push('/login');
-      return;
-    }
-
     setStatus('loading');
     setMessage('');
 
     try {
+      const sessionUser = await refreshSession();
+      if (!sessionUser) {
+        setStatus('error');
+        setMessage('Please sign in to submit a review.');
+        router.push('/login');
+        return;
+      }
+
       const response = await fetch('/api/reviews', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
         },
+        credentials: 'same-origin',
         body: JSON.stringify({
           productId,
           userName: form.userName,

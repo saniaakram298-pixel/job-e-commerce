@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server';
 import { connectDB } from '@/lib/mongodb';
 import { Product } from '@/models/Product';
 import { Category } from '@/models/Category';
-import { createErrorResponse, createSuccessResponse } from '@/lib/response';
+import { createErrorResponse, createSuccessResponse, requireAdminUser } from '@/lib/response';
 import { uploadToCloudinary } from '@/lib/cloudinary';
 import mongoose from 'mongoose';
 import { getTotalStock, normalizeProductVariants } from '@/lib/productStock';
@@ -225,6 +225,9 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const authorization = await requireAdminUser(request);
+    if (authorization.response) return authorization.response;
+
     const connection = await connectDB();
     if (!connection) {
       return createErrorResponse('Database unavailable', 503);
@@ -329,8 +332,9 @@ export async function POST(request: NextRequest) {
 
     const { sizes, colors } = normalizeProductVariants(body.sizes, body.colors);
 
-    if (sizes.length === 0) {
-      return createErrorResponse('At least one size is required', 400);
+    const stock = body.stock === undefined ? undefined : Number(body.stock);
+    if (sizes.length === 0 && colors.length === 0 && (!Number.isSafeInteger(stock) || Number(stock) < 0)) {
+      return createErrorResponse('A non-negative stock value is required when the product has no variants', 400);
     }
 
     const newProduct = new Product({
@@ -338,6 +342,7 @@ export async function POST(request: NextRequest) {
       description,
       price: Number(body.price),
       discountPrice: body.discountPrice ? Number(body.discountPrice) : undefined,
+      stock,
       collection,
       category,
       subcategory: body.subcategory || '',
@@ -382,6 +387,9 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const authorization = await requireAdminUser(request);
+    if (authorization.response) return authorization.response;
+
     await connectDB();
     const { id } = await params;
 
@@ -450,7 +458,11 @@ export async function PUT(
     }
 
     if (body.stock !== undefined) {
-      return createErrorResponse('The stock field is no longer supported. Use sizes[].stock and colors[].stock instead.', 400);
+      const stock = Number(body.stock);
+      if (!Number.isSafeInteger(stock) || stock < 0) {
+        return createErrorResponse('Stock must be a non-negative whole number', 400);
+      }
+      updatePayload.stock = stock;
     }
 
     const { sizes, colors } = normalizeProductVariants(updatePayload.sizes, updatePayload.colors);

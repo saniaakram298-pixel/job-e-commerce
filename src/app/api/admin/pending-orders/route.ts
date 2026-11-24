@@ -4,11 +4,15 @@ import { Order } from '@/models/Order';
 import { getAuthToken, getUserIdFromToken } from '@/lib/response';
 import { User } from '@/models/User';
 import { sendOrderConfirmationEmail } from '@/lib/email';
+import { requireAdminUser } from '@/lib/response';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
   try {
+    const authorization = await requireAdminUser(request);
+    if (authorization.response) return authorization.response;
+
     const token = getAuthToken(request);
     if (!token) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
@@ -55,6 +59,9 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const authorization = await requireAdminUser(request);
+    if (authorization.response) return authorization.response;
+
     const token = getAuthToken(request);
     if (!token) {
       return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });

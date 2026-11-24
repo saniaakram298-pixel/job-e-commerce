@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { saveUploadedFile } from '@/lib/uploadHandler';
 import { connectDB } from '@/lib/mongodb';
 import { Product } from '@/models/Product';
-import { createErrorResponse, createSuccessResponse } from '@/lib/response';
+import { createErrorResponse, createSuccessResponse, requireAdminUser } from '@/lib/response';
 export const dynamic = 'force-dynamic';
 
 /**
@@ -31,6 +31,9 @@ export const dynamic = 'force-dynamic';
  */
 export async function POST(request: NextRequest) {
   try {
+    const authorization = await requireAdminUser(request);
+    if (authorization.response) return authorization.response;
+
     await connectDB();
 
     const formData = await request.formData();

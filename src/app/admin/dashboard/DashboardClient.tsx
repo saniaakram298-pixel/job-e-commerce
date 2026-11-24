@@ -106,7 +106,7 @@ async function fetchCollectionsFromApi(): Promise<{ collections: CollectionItem[
 
 export default function AtelierDashboardClient({ collections: initialCollections, total: initialTotal, initialError }: DashboardClientProps) {
     const router = useRouter();
-    const { logout, user, token } = useAuthStore();
+    const { logout, user } = useAuthStore();
     const [activeTab, setActiveTab] = useState('overview');
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const [darkMode, setDarkMode] = useState(false);
@@ -139,13 +139,8 @@ export default function AtelierDashboardClient({ collections: initialCollections
     const { data: productInventory } = useQuery<{ total: number }, Error>({
         queryKey: ['admin-product-count'],
         queryFn: async () => {
-            const headers: HeadersInit = {};
-            if (token) {
-                headers.Authorization = `Bearer ${token}`;
-            }
             const response = await fetch('/api/products?limit=1&page=1&sort=newest', {
                 cache: 'no-store',
-                headers,
             });
             if (!response.ok) {
                 throw new Error('Failed to load product count');
@@ -170,7 +165,7 @@ export default function AtelierDashboardClient({ collections: initialCollections
         staleTime: 1000 * 30,
         refetchOnWindowFocus: false,
         retry: 2,
-        enabled: Boolean(token),
+        enabled: Boolean(user),
     });
 
     const queryClient = useQueryClient();
@@ -184,7 +179,7 @@ export default function AtelierDashboardClient({ collections: initialCollections
         },
         staleTime: 1000 * 30,
         refetchOnWindowFocus: false,
-        enabled: Boolean(token),
+        enabled: Boolean(user),
     });
 
     const normalizedOrders = Array.isArray(orders) ? orders : [];
@@ -193,13 +188,8 @@ export default function AtelierDashboardClient({ collections: initialCollections
     const { data: adminCategories = [] } = useQuery<{ slug: string; name: string; productCount: number }[], Error>({
         queryKey: ['admin-categories'],
         queryFn: async () => {
-            const headers: HeadersInit = {};
-            if (token) {
-                headers.Authorization = `Bearer ${token}`;
-            }
             const response = await fetch('/api/categories', {
                 cache: 'no-store',
-                headers,
             });
             if (!response.ok) {
                 throw new Error('Failed to load categories');
@@ -229,13 +219,8 @@ export default function AtelierDashboardClient({ collections: initialCollections
         queryKey: ['admin-stats'],
         queryFn: async () => {
             try {
-                const headers: HeadersInit = {};
-                if (token) {
-                    headers.Authorization = `Bearer ${token}`;
-                }
                 const response = await fetch('/api/admin/stats', {
                     cache: 'no-store',
-                    headers,
                 });
                 if (!response.ok) {
                     const errData = await response.json().catch(() => ({}));
@@ -269,7 +254,7 @@ export default function AtelierDashboardClient({ collections: initialCollections
         refetchOnMount: 'always',
         staleTime: 1000 * 30,
         retry: 2,
-        enabled: Boolean(token),
+        enabled: Boolean(user),
     });
 
     const serverError = error?.message ?? initialError ?? null;
@@ -337,11 +322,15 @@ export default function AtelierDashboardClient({ collections: initialCollections
         ];
     }, [collections, orders, normalizedSearch, userEmail, userName]);
 
-    const handleLogout = () => {
+    const handleLogout = async () => {
         // Clear all subcategory data from session on logout
         useSubcategoryStore.getState().clearAll();
-        logout();
-        window.location.href = '/login';
+        try {
+            await logout();
+            window.location.href = '/login';
+        } catch (logoutError) {
+            console.error('Logout failed:', logoutError);
+        }
     };
 
     const handleCategorySelect = (categoryName: string) => {
@@ -815,4 +804,3 @@ function StatCard({ label, value, trend, icon, darkMode, onClick }: { label: str
         </button>
     );
 }
-

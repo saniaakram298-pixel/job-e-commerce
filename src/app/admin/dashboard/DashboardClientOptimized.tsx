@@ -122,7 +122,7 @@ export default function AtelierDashboardClient({
   initialError,
 }: DashboardClientProps) {
   const router = useRouter();
-  const { logout, user, token } = useAuthStore();
+  const { logout, user } = useAuthStore();
   const { error: showError } = useToast();
   
   // UI State
@@ -167,7 +167,7 @@ export default function AtelierDashboardClient({
     staleTime: 1000 * 30,
     refetchOnWindowFocus: false,
     retry: 2,
-    enabled: Boolean(token),
+    enabled: Boolean(user),
   });
 
   // Pending Orders Query - Lazy loaded
@@ -180,7 +180,7 @@ export default function AtelierDashboardClient({
     },
     staleTime: 1000 * 30,
     refetchOnWindowFocus: false,
-    enabled: Boolean(token),
+    enabled: Boolean(user),
   });
 
   // Categories Query - Lazy loaded
@@ -269,9 +269,13 @@ export default function AtelierDashboardClient({
     ];
   }, [collections, orders, normalizedSearch, userEmail, userName]);
 
-  const handleLogout = () => {
-    logout();
-    window.location.href = '/login';
+  const handleLogout = async () => {
+    try {
+      await logout();
+      window.location.href = '/login';
+    } catch (logoutError) {
+      console.error('Logout failed:', logoutError);
+    }
   };
 
   const handleCategorySelect = (categoryName: string) => {

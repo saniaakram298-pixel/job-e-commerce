@@ -3,12 +3,15 @@ import { connectDB } from '@/lib/mongodb';
 import { Order } from '@/models/Order';
 import { User } from '@/models/User';
 import { Product } from '@/models/Product';  // ← ADDED
-import { createErrorResponse, createSuccessResponse, getAuthToken, getUserIdFromToken } from '@/lib/response';
+import { createErrorResponse, createSuccessResponse, getAuthToken, getUserIdFromToken, requireAdminUser } from '@/lib/response';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
   try {
+    const authorization = await requireAdminUser(request);
+    if (authorization.response) return authorization.response;
+
     const token = getAuthToken(request);
     if (!token) {
       return createErrorResponse('Unauthorized', 401);

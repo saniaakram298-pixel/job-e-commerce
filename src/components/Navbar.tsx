@@ -76,8 +76,13 @@ export default function Navbar({ scrolled: parentScrolled }: NavbarProps) {
     };
   }, [isMobileMenuOpen]);
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    try {
+      await logout();
+    } catch (error) {
+      console.error('Logout failed:', error);
+      return;
+    }
     setIsProfileOpen(false);
     setIsMobileMenuOpen(false);
     router.push('/login');

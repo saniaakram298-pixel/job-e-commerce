@@ -2,12 +2,15 @@ import { NextRequest } from 'next/server';
 import { connectDB } from '@/lib/mongodb';
 import { Order } from '@/models/Order';
 import { Collection } from '@/models/Collection';
-import { createErrorResponse, createSuccessResponse, getAuthToken } from '@/lib/response';
+import { createErrorResponse, createSuccessResponse, getAuthToken, requireAdminUser } from '@/lib/response';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
   try {
+    const authorization = await requireAdminUser(request);
+    if (authorization.response) return authorization.response;
+
     const token = getAuthToken(request);
     if (!token) {
       return createErrorResponse('Unauthorized', 401);
