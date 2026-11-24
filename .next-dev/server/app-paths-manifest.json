@@ -1,0 +1,21 @@
+{
+  "/_not-found/page": "app/_not-found/page.js",
+  "/product/[id]/page": "app/product/[id]/page.js",
+  "/page": "app/page.js",
+  "/collections/[slug]/page": "app/collections/[slug]/page.js",
+  "/admin/dashboard/page": "app/admin/dashboard/page.js",
+  "/api/orders/route": "app/api/orders/route.js",
+  "/api/products/route": "app/api/products/route.js",
+  "/api/admin/pending-orders/route": "app/api/admin/pending-orders/route.js",
+  "/login/page": "app/login/page.js",
+  "/api/admin/reviews/route": "app/api/admin/reviews/route.js",
+  "/api/categories/route": "app/api/categories/route.js",
+  "/api/auth/session/route": "app/api/auth/session/route.js",
+  "/api/admin/stats/route": "app/api/admin/stats/route.js",
+  "/api/admin/repeated-orders/route": "app/api/admin/repeated-orders/route.js",
+  "/api/admin/reviews-weekly/route": "app/api/admin/reviews-weekly/route.js",
+  "/api/admin/best-sellers/route": "app/api/admin/best-sellers/route.js",
+  "/api/admin/revenue/weekly/route": "app/api/admin/revenue/weekly/route.js",
+  "/api/products/trending/route": "app/api/products/trending/route.js",
+  "/api/reviews/route": "app/api/reviews/route.js"
+}
